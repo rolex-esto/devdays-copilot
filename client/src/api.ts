@@ -18,7 +18,10 @@ export const fetchDatasets = async (): Promise<Dataset[]> => {
 
 export const fetchQuality = async (id: string): Promise<QualityReport> => {
   const response = await fetch(`${BASE}/datasets/${id}/quality`);
-  if (!response.ok) throw new Error('We could not analyze this dataset.');
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ message: 'We could not analyze this dataset.' }));
+    throw new Error(error.message ?? 'We could not analyze this dataset.');
+  }
   return response.json();
 };
 

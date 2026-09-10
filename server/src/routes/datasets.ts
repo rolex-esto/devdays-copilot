@@ -60,6 +60,14 @@ router.post('/import-csv', express.text({ type: ['text/csv', 'text/plain'], limi
   }
 });
 
+router.get('/:id/quality', (req, res) => {
+  const dataset = getDatasetById(req.params.id);
+  if (!dataset) {
+    return res.status(404).json({ message: 'Dataset not found' });
+  }
+  return res.json(analyzeDataset(dataset.records));
+});
+
 router.get('/:id', (req, res) => {
   const dataset = getDatasetById(req.params.id);
 
@@ -68,14 +76,6 @@ router.get('/:id', (req, res) => {
   }
 
   return res.json(dataset);
-});
-
-router.get('/:id/quality', (req, res) => {
-  const dataset = getDatasetById(req.params.id);
-  if (!dataset) {
-    return res.status(404).json({ message: 'Dataset not found' });
-  }
-  return res.json(analyzeDataset(dataset.records));
 });
 
 router.put('/:id', (req, res) => {

@@ -167,6 +167,21 @@ function App() {
     try {
       setQuality(await fetchQuality(id));
     } catch (qualityError) {
+      // A long-lived browser tab can hold an ID from before a server refresh.
+      // Refresh the list once so a transient stale selection does not strand the user.
+      try {
+        const refreshed = await fetchDatasets();
+        const current = refreshed.find((dataset) => dataset.id === id);
+        if (current) {
+          setDatasets(refreshed);
+          setSelectedId(current.id);
+          setQuality(await fetchQuality(current.id));
+          setError('');
+          return;
+        }
+      } catch {
+        // Surface the original quality error below; the retry is best effort.
+      }
       setQuality(null);
       setError(qualityError instanceof Error ? qualityError.message : 'We could not analyze this dataset.');
     } finally {
