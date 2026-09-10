@@ -30,7 +30,13 @@ router.post('/', (req, res) => {
     });
   }
 
-  const dataset = createDataset(parsed.data);
+  const dataset = createDataset({
+    name: parsed.data.name,
+    description: parsed.data.description,
+    source_type: parsed.data.source_type,
+    file_name: parsed.data.file_name,
+    records: parsed.data.records
+  });
   return res.status(201).json(dataset);
 });
 
