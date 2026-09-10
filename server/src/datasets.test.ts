@@ -78,4 +78,23 @@ describe('dataset API', () => {
     expect(response.status).toBe(400);
     expect(response.body.message).toContain('expected 2');
   });
+
+  it('returns an explainable quality report for imported data', async () => {
+    const created = await request(app)
+      .post('/api/datasets/import-csv?name=Dirty%20Cafe&file_name=cafe.csv')
+      .set('Content-Type', 'text/csv')
+      .send('Transaction ID,Quantity,Price Per Unit,Payment Method\n1,2,5.00,Cash\n1,,ERROR,UNKNOWN\n3,-2,100.00,Card\n');
+
+    const report = await request(app).get(`/api/datasets/${created.body.id}/quality`);
+
+    expect(report.status).toBe(200);
+    expect(report.body.summary.rows).toBe(3);
+    expect(report.body.summary.columns).toBe(4);
+    expect(report.body.summary.missing_values).toBeGreaterThan(0);
+    expect(report.body.summary.duplicate_rows).toBe(0);
+    expect(report.body.issues.length).toBeGreaterThan(0);
+    expect(report.body.columns).toEqual(expect.arrayContaining([
+      expect.objectContaining({ name: 'Quantity', inferred_type: 'number' })
+    ]));
+  });
 });

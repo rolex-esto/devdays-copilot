@@ -1,4 +1,5 @@
 import type { Dataset, DatasetRecord, DatasetSourceType } from './types';
+import type { QualityReport } from './types';
 
 const BASE = '/api';
 
@@ -12,6 +13,12 @@ export const fetchDatasets = async (): Promise<Dataset[]> => {
     throw new Error('Unable to load datasets.');
   }
 
+  return response.json();
+};
+
+export const fetchQuality = async (id: string): Promise<QualityReport> => {
+  const response = await fetch(`${BASE}/datasets/${id}/quality`);
+  if (!response.ok) throw new Error('We could not analyze this dataset.');
   return response.json();
 };
 

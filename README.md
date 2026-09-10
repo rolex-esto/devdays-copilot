@@ -87,7 +87,19 @@ The `verify` command runs linting, TypeScript checks, tests, and production buil
 - POST /api/datasets
 - POST /api/datasets/import-csv
 - GET /api/datasets/:id
+- GET /api/datasets/:id/quality
 - PUT /api/datasets/:id
 - DELETE /api/datasets/:id
 
-This project is intentionally scoped to the first working vertical slice before broadening into the larger data quality platform described in the product brief.
+## Automatic quality report
+
+CSV imports are analyzed immediately when the dataset details view opens. The deterministic quality engine reports:
+
+- quality score and label
+- completeness, uniqueness, validity, and consistency dimensions
+- semantic missing values such as `NULL`, `N/A`, `UNKNOWN`, and `ERROR`
+- exact duplicate rows and repeated identifier values
+- inferred column types, unique counts, numeric averages, medians, ranges, and potential outliers
+- invalid numeric values and clickable affected-row drill-down
+
+The engine is explainable and does not modify uploaded records. The `GET /api/datasets/:id/quality` endpoint recalculates the report from the stored records, so users can run the check again after a data update.

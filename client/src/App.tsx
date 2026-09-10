@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
-import { createDataset, deleteDataset, fetchDatasets, importCsvDataset, updateDataset } from './api';
-import type { Dataset, DatasetRecord, DatasetSourceType } from './types';
+import { createDataset, deleteDataset, fetchDatasets, fetchQuality, importCsvDataset, updateDataset } from './api';
+import type { Dataset, DatasetRecord, DatasetSourceType, QualityIssue, QualityReport } from './types';
 
 const emptyForm = {
   name: '',
@@ -15,6 +15,107 @@ const sampleRecords: DatasetRecord[] = [
   { order_id: 'A-1003', customer_name: 'Katherine Johnson', status: 'Active', amount: 1640 }
 ];
 
+const severityLabel = (severity: QualityIssue['severity']) => severity[0].toUpperCase() + severity.slice(1);
+type IssueSelectionHandler = (value: QualityIssue | null) => void;
+
+function QualityOverview({
+  dataset,
+  report,
+  selectedIssue,
+  onIssueSelect,
+  onRefresh
+}: {
+  dataset: Dataset;
+  report: QualityReport;
+  selectedIssue: QualityIssue | null;
+  onIssueSelect: IssueSelectionHandler;
+  onRefresh: () => void;
+}) {
+  const affectedRecords = selectedIssue
+    ? selectedIssue.record_indexes.map((index) => ({ index, record: dataset.records[index] })).filter((item) => item.record)
+    : [];
+  const severityCounts = report.issues.reduce<Record<string, number>>((counts, finding) => {
+    counts[finding.severity] = (counts[finding.severity] ?? 0) + 1;
+    return counts;
+  }, {});
+
+  return (
+    <section className="quality-report">
+      <div className="quality-heading">
+        <div>
+          <p className="section-kicker">Analysis complete</p>
+          <h2>Data Quality Overview</h2>
+          <p className="helper-text">A clear snapshot of the health of {dataset.name}. No data was changed.</p>
+        </div>
+        <button type="button" className="quiet-button refresh-button" onClick={onRefresh}>Run check again</button>
+      </div>
+      <div className="quality-hero panel">
+        <div className={`score-circle score-${report.label.toLowerCase().replaceAll(' ', '-')}`}>
+          <strong>{report.score}</strong><span>/100</span>
+        </div>
+        <div className="score-copy">
+          <p className="section-kicker">Data quality score</p>
+          <h3>{report.label}</h3>
+          <p>{report.total_issues === 0 ? 'No major issues detected by the configured checks.' : `${report.total_issues} issue types affect ${report.affected_rows} records.`}</p>
+        </div>
+        <div className="dimension-list">
+          {Object.entries(report.dimensions).map(([name, value]) => (
+            <div key={name}><span>{name}</span><strong>{value}%</strong><i><em style={{ width: `${value}%` }} /></i></div>
+          ))}
+        </div>
+      </div>
+      <div className="quality-metrics">
+        <Metric label="Rows" value={report.summary.rows} />
+        <Metric label="Columns" value={report.summary.columns} />
+        <Metric label="Missing values" value={report.summary.missing_values} />
+        <Metric label="Duplicate rows" value={report.summary.duplicate_rows} />
+        <Metric label="Invalid values" value={report.summary.invalid_values} />
+        <Metric label="Potential outliers" value={report.summary.potential_outliers} />
+      </div>
+      <div className="quality-section panel">
+        <div className="section-title-row"><div><p className="section-kicker">Findings</p><h3>Issues detected</h3></div><span className="muted">{report.issues.length} issue types</span></div>
+        {report.issues.length === 0 ? <p className="empty-report">Everything looks healthy based on the checks we can run.</p> : (
+          <>
+            <div className="severity-row">
+              {(['critical', 'high', 'medium', 'low'] as const).map((severity) => <span key={severity} className={`severity-pill ${severity}`}>{severityLabel(severity)} <strong>{severityCounts[severity] ?? 0}</strong></span>)}
+            </div>
+            <div className="issue-list">
+              {report.issues.map((issue) => (
+                <button type="button" key={issue.id} className={`issue-row ${selectedIssue?.id === issue.id ? 'selected' : ''}`} onClick={() => onIssueSelect(selectedIssue?.id === issue.id ? null : issue)}>
+                  <span className={`severity-dot ${issue.severity}`} aria-label={`${severityLabel(issue.severity)} severity`} />
+                  <span><strong>{issue.message}</strong><small>{issue.column_name ?? 'Dataset-wide'} · {issue.affected_rows} affected rows</small></span>
+                  <span className="issue-action">View rows →</span>
+                </button>
+              ))}
+            </div>
+          </>
+        )}
+        {selectedIssue ? (
+          <div className="affected-records">
+            <div className="section-title-row"><h3>Rows affected by {selectedIssue.message.toLowerCase()}</h3><button type="button" className="quiet-button" onClick={() => onIssueSelect(null)}>Close</button></div>
+            <div className="record-table-wrap">
+              <table><thead><tr><th>Row</th>{Object.keys(affectedRecords[0]?.record ?? {}).slice(0, 6).map((key) => <th key={key}>{key}</th>)}</tr></thead>
+                <tbody>{affectedRecords.slice(0, 25).map(({ index, record }) => <tr key={index}><td>{index + 1}</td>{Object.values(record).slice(0, 6).map((value, valueIndex) => <td key={valueIndex}>{String(value ?? '—')}</td>)}</tr>)}</tbody>
+              </table>
+            </div>
+            {affectedRecords.length > 25 ? <p className="muted">Showing the first 25 affected rows.</p> : null}
+          </div>
+        ) : null}
+      </div>
+      <div className="quality-section panel">
+        <div className="section-title-row"><div><p className="section-kicker">Automatic profiling</p><h3>Column health</h3></div><span className="muted">Click a finding above to inspect rows</span></div>
+        <div className="column-table-wrap"><table><thead><tr><th>Column</th><th>Type</th><th>Missing</th><th>Unique</th><th>Average</th><th>Outliers</th></tr></thead>
+          <tbody>{report.columns.map((column) => <tr key={column.name}><td><strong>{column.name}</strong></td><td><span className="type-badge">{column.inferred_type}</span></td><td>{column.null_values} <small>({column.missing_percentage}%)</small></td><td>{column.unique_values}</td><td>{column.average_value ?? '—'}</td><td>{column.outlier_count}</td></tr>)}</tbody>
+        </table></div>
+      </div>
+    </section>
+  );
+}
+
+function Metric({ label, value }: { label: string; value: number }) {
+  return <div className="metric-card"><span>{label}</span><strong>{value.toLocaleString()}</strong></div>;
+}
+
 function App() {
   const [datasets, setDatasets] = useState<Dataset[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -24,6 +125,9 @@ function App() {
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [csvFile, setCsvFile] = useState<File | null>(null);
+  const [quality, setQuality] = useState<QualityReport | null>(null);
+  const [qualityLoading, setQualityLoading] = useState(false);
+  const [selectedIssue, setSelectedIssue] = useState<QualityIssue | null>(null);
 
   const selectedDataset = useMemo(
     () => datasets.find((dataset) => dataset.id === selectedId) ?? null,
@@ -56,6 +160,27 @@ function App() {
       file_name: selectedDataset.file_name ?? ''
     });
   }, [isCreating, selectedDataset]);
+
+  const loadQuality = useCallback(async (id: string) => {
+    setQualityLoading(true);
+    setSelectedIssue(null);
+    try {
+      setQuality(await fetchQuality(id));
+    } catch (qualityError) {
+      setQuality(null);
+      setError(qualityError instanceof Error ? qualityError.message : 'We could not analyze this dataset.');
+    } finally {
+      setQualityLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!isCreating && selectedDataset) {
+      void loadQuality(selectedDataset.id);
+    } else {
+      setQuality(null);
+    }
+  }, [isCreating, loadQuality, selectedDataset]);
 
   const showCreateForm = () => {
     setSelectedId(null);
@@ -111,6 +236,7 @@ function App() {
           setIsCreating(false);
           setCsvFile(null);
           setStatus(`"${dataset.name}" is ready to explore.`);
+          void loadQuality(dataset.id);
         })
         .catch((submitError) => setError(submitError instanceof Error ? submitError.message : 'We could not import that CSV.'))
         .finally(() => setIsSubmitting(false));
@@ -145,6 +271,7 @@ function App() {
 
       setDatasets((current) => current.map((item) => (item.id === dataset.id ? dataset : item)));
       setStatus('Your changes have been saved.');
+      void loadQuality(dataset.id);
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : 'We could not save those changes.');
     } finally {
@@ -164,6 +291,7 @@ function App() {
       setDatasets((current) => current.filter((dataset) => dataset.id !== id));
       setSelectedId(null);
       setIsCreating(false);
+      setQuality(null);
       setStatus('Dataset deleted.');
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : 'We could not delete that dataset.');
@@ -311,6 +439,23 @@ function App() {
               </div>
             </form>
           ) : selectedDataset ? (
+            <>
+            {qualityLoading ? (
+              <section className="panel analysis-panel" aria-live="polite">
+                <p className="section-kicker">Data quality check</p>
+                <h2>Analyzing {selectedDataset.name}</h2>
+                <p className="helper-text">We are checking missing values, duplicates, formats, and unusual values.</p>
+                <div className="analysis-bar"><span /></div>
+              </section>
+            ) : quality ? (
+              <QualityOverview
+                dataset={selectedDataset}
+                report={quality}
+                selectedIssue={selectedIssue}
+                onIssueSelect={setSelectedIssue}
+                onRefresh={() => void loadQuality(selectedDataset.id)}
+              />
+            ) : null}
             <form className="panel form-panel" onSubmit={handleUpdate}>
               <div className="panel-header">
                 <div>
@@ -356,6 +501,7 @@ function App() {
                 </button>
               </div>
             </form>
+            </>
           ) : (
             <section className="panel welcome-panel">
               <div className="welcome-copy">

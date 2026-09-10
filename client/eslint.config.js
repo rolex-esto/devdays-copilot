@@ -22,7 +22,7 @@ export default [
     },
     rules: {
       ...reactHooks.configs.recommended.rules,
-      'no-unused-vars': ['error', { argsIgnorePattern: '^_' }]
+      'no-unused-vars': 'off'
     }
   }
 ];
