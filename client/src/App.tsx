@@ -17,6 +17,49 @@ const sampleRecords: DatasetRecord[] = [
 
 const severityLabel = (severity: QualityIssue['severity']) => severity[0].toUpperCase() + severity.slice(1);
 type IssueSelectionHandler = (value: QualityIssue | null) => void;
+type SeverityFilter = 'all' | QualityIssue['severity'];
+const severityOrder: QualityIssue['severity'][] = ['critical', 'high', 'medium', 'low'];
+
+const getQualityRecommendation = (counts: Record<QualityIssue['severity'], number>) => {
+  if (counts.critical > 0) {
+    return {
+      priority: 'critical' as const,
+      title: 'Immediate action recommended',
+      description: `Resolve ${counts.critical} Critical issue${counts.critical === 1 ? '' : 's'} first before using this dataset for analysis or reporting.${counts.high > 0 ? ` Then review ${counts.high} High-severity issue${counts.high === 1 ? '' : 's'}.` : ''}`,
+      actionLabel: 'Review Critical Issues'
+    };
+  }
+  if (counts.high > 0) {
+    return {
+      priority: 'high' as const,
+      title: 'Review High-severity issues first',
+      description: `No Critical issues were detected, but ${counts.high} High-severity issue${counts.high === 1 ? '' : 's'} may affect data reliability. Resolve these before reviewing Medium and Low issues.`,
+      actionLabel: 'Review High Issues'
+    };
+  }
+  if (counts.medium > 0) {
+    return {
+      priority: 'medium' as const,
+      title: 'Dataset is usable with caution',
+      description: `No Critical or High issues were detected. Review the ${counts.medium} Medium-severity issue${counts.medium === 1 ? '' : 's'} before relying on the dataset for important analysis.`,
+      actionLabel: 'Review Medium Issues'
+    };
+  }
+  if (counts.low > 0) {
+    return {
+      priority: 'low' as const,
+      title: 'Minor cleanup recommended',
+      description: `No major data-quality problems were detected. The remaining ${counts.low} Low-severity issue${counts.low === 1 ? '' : 's'} are unlikely to block analysis but may still be worth cleaning.`,
+      actionLabel: 'Review Low Issues'
+    };
+  }
+  return {
+    priority: 'all' as const,
+    title: 'No major issues detected',
+    description: 'No Critical, High, Medium, or Low findings were detected by the current quality checks.',
+    actionLabel: ''
+  };
+};
 
 function QualityOverview({
   dataset,
@@ -33,6 +76,7 @@ function QualityOverview({
   onRefresh: () => void;
   onOpenExplorer: (issue: QualityIssue) => void;
 }) {
+  const [severityFilter, setSeverityFilter] = useState<SeverityFilter>('all');
   const affectedRecords = selectedIssue
     ? selectedIssue.record_indexes.map((index) => ({ index, record: dataset.records[index] })).filter((item) => item.record)
     : [];
@@ -40,6 +84,19 @@ function QualityOverview({
     counts[finding.severity] = (counts[finding.severity] ?? 0) + 1;
     return counts;
   }, {});
+  const counts = {
+    critical: severityCounts.critical ?? 0,
+    high: severityCounts.high ?? 0,
+    medium: severityCounts.medium ?? 0,
+    low: severityCounts.low ?? 0
+  };
+  const recommendation = getQualityRecommendation(counts);
+  const visibleIssues = report.issues
+    .filter((issue) => severityFilter === 'all' || issue.severity === severityFilter)
+    .sort((left, right) => {
+      const priority = severityOrder.indexOf(left.severity) - severityOrder.indexOf(right.severity);
+      return priority || right.affected_rows - left.affected_rows;
+    });
 
   return (
     <section className="quality-report">
@@ -76,13 +133,25 @@ function QualityOverview({
       </div>
       <div className="quality-section panel">
         <div className="section-title-row"><div><p className="section-kicker">Findings</p><h3>Issues detected</h3></div><span className="muted">{report.issues.length} issue types</span></div>
+        <div className={`recommendation recommendation-${recommendation.priority}`}>
+          <div>
+            <p className="recommendation-label">Recommended action</p>
+            <h4>{recommendation.title}</h4>
+            <p>{recommendation.description}</p>
+            {report.affected_rows > 0 ? <small>{report.affected_rows.toLocaleString()} unique records affected across all findings.</small> : null}
+          </div>
+          {recommendation.actionLabel ? <button type="button" className="primary-button recommendation-action" onClick={() => setSeverityFilter(recommendation.priority)}>{recommendation.actionLabel} →</button> : null}
+        </div>
         {report.issues.length === 0 ? <p className="empty-report">Everything looks healthy based on the checks we can run.</p> : (
           <>
+            <div className="filter-label">Filter issues</div>
             <div className="severity-row">
-              {(['critical', 'high', 'medium', 'low'] as const).map((severity) => <span key={severity} className={`severity-pill ${severity}`}>{severityLabel(severity)} <strong>{severityCounts[severity] ?? 0}</strong></span>)}
+              <button type="button" className={`severity-pill all ${severityFilter === 'all' ? 'active' : ''}`} aria-pressed={severityFilter === 'all'} onClick={() => setSeverityFilter('all')}>All <strong>{report.issues.length}</strong></button>
+              {severityOrder.map((severity) => <button type="button" key={severity} className={`severity-pill ${severity} ${severityFilter === severity ? 'active' : ''}`} aria-pressed={severityFilter === severity} disabled={counts[severity] === 0} onClick={() => setSeverityFilter(severity)}>{severityLabel(severity)} <strong>{counts[severity]}</strong></button>)}
             </div>
+            <div className="section-title-row filtered-results"><h4>{severityFilter === 'all' ? 'Showing all issues' : `Showing ${severityLabel(severityFilter)}-severity issues`}</h4><span className="muted">{visibleIssues.length} issue{visibleIssues.length === 1 ? '' : 's'}</span>{severityFilter !== 'all' ? <button type="button" className="quiet-button" onClick={() => setSeverityFilter('all')}>Clear filter</button> : null}</div>
             <div className="issue-list">
-              {report.issues.map((issue) => (
+              {visibleIssues.map((issue) => (
                 <button type="button" key={issue.id} className={`issue-row ${selectedIssue?.id === issue.id ? 'selected' : ''}`} onClick={() => onIssueSelect(selectedIssue?.id === issue.id ? null : issue)}>
                   <span className={`severity-dot ${issue.severity}`} aria-label={`${severityLabel(issue.severity)} severity`} />
                   <span><strong>{issue.message}</strong><small>{issue.column_name ?? 'Dataset-wide'} · {issue.affected_rows} affected rows</small></span>
