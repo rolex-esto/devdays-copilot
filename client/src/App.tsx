@@ -152,10 +152,13 @@ function QualityOverview({
             </div>
             <div className="section-title-row filtered-results"><h4>{severityFilter === 'all' ? 'Showing all issues' : `Showing ${severityLabel(severityFilter)}-severity issues`}</h4><span className="muted">{visibleIssues.length} issue{visibleIssues.length === 1 ? '' : 's'}</span>{severityFilter !== 'all' ? <button type="button" className="quiet-button" onClick={() => setSeverityFilter('all')}>Clear filter</button> : null}</div>
             <div className="issue-list">
+              <div className="issue-list-header"><span>Severity</span><span>Finding</span><span>Column</span><span>Affected</span><span>Action</span></div>
               {visibleIssues.map((issue) => (
                 <button type="button" key={issue.id} className={`issue-row ${selectedIssue?.id === issue.id ? 'selected' : ''}`} onClick={() => onIssueSelect(selectedIssue?.id === issue.id ? null : issue)}>
-                  <span className={`severity-dot ${issue.severity}`} aria-label={`${severityLabel(issue.severity)} severity`} />
-                  <span><strong>{issue.message}</strong><small>{issue.column_name ?? 'Dataset-wide'} · {issue.affected_rows} affected rows</small></span>
+                  <span className={`severity-text ${issue.severity}`}><span className={`severity-dot ${issue.severity}`} aria-hidden="true" />{severityLabel(issue.severity)}</span>
+                  <span><strong>{issue.message}</strong></span>
+                  <span className="muted">{issue.column_name ?? 'Dataset-wide'}</span>
+                  <span className="muted">{issue.affected_rows}</span>
                   <span className="issue-action" onClick={(event) => { event.stopPropagation(); onOpenExplorer(issue); }}>View rows →</span>
                 </button>
               ))}
@@ -267,6 +270,17 @@ function Metric({ label, value }: { label: string; value: number }) {
   return <div className="metric-card"><span>{label}</span><strong>{value.toLocaleString()}</strong></div>;
 }
 
+function HistoryPanel({ dataset, report }: { dataset: Dataset; report: QualityReport | null }) {
+  return (
+    <section className="workspace-section panel">
+      <div className="section-title-row"><div><p className="section-kicker">History</p><h2>Quality history</h2></div><span className="muted">{dataset.analysis_status === 'COMPLETED' ? 'Latest run' : 'No completed runs'}</span></div>
+      <table className="history-table"><thead><tr><th>Run</th><th>Score</th><th>Status</th></tr></thead><tbody>
+        <tr><td>{report?.last_analyzed_at ? new Date(report.last_analyzed_at).toLocaleString() : 'No run yet'}</td><td>{report?.score ?? '—'}</td><td><span className={`status-badge ${dataset.analysis_status.toLowerCase()}`}>{dataset.analysis_status.replace('_', ' ')}</span></td></tr>
+      </tbody></table>
+    </section>
+  );
+}
+
 function App() {
   const [datasets, setDatasets] = useState<Dataset[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -279,7 +293,7 @@ function App() {
   const [quality, setQuality] = useState<QualityReport | null>(null);
   const [qualityLoading, setQualityLoading] = useState(false);
   const [selectedIssue, setSelectedIssue] = useState<QualityIssue | null>(null);
-  const [activeView, setActiveView] = useState<'quality' | 'explorer'>('quality');
+  const [activeView, setActiveView] = useState<'overview' | 'data' | 'columns' | 'quality' | 'history'>('quality');
 
   const selectedDataset = useMemo(
     () => datasets.find((dataset) => dataset.id === selectedId) ?? null,
@@ -467,9 +481,6 @@ function App() {
     }
   };
 
-  const totalRows = datasets.reduce((sum, dataset) => sum + dataset.row_count, 0);
-  const totalColumns = datasets.reduce((sum, dataset) => sum + dataset.column_count, 0);
-
   return (
     <div className="app-shell">
       <header className="topbar">
@@ -609,6 +620,17 @@ function App() {
             </form>
           ) : selectedDataset ? (
             <>
+            <header className="dataset-header">
+              <div>
+                <p className="section-kicker">Dataset</p>
+                <h2>{selectedDataset.name}</h2>
+                <p className="dataset-context">{selectedDataset.source_type} · {selectedDataset.row_count.toLocaleString()} rows · {selectedDataset.column_count} columns · Updated {new Date(selectedDataset.updated_at).toLocaleDateString()}</p>
+              </div>
+              <button type="button" className="quiet-button" onClick={() => setActiveView('overview')}>Edit details</button>
+            </header>
+            <nav className="dataset-tabs" aria-label="Dataset sections">
+              {(['overview', 'data', 'columns', 'quality', 'history'] as const).map((tab) => <button type="button" key={tab} className={activeView === tab ? 'active' : ''} aria-current={activeView === tab ? 'page' : undefined} onClick={() => setActiveView(tab)}>{tab[0].toUpperCase() + tab.slice(1)}</button>)}
+            </nav>
             {qualityLoading ? (
               <section className="panel analysis-panel" aria-live="polite">
                 <p className="section-kicker">Data quality check</p>
@@ -616,17 +638,17 @@ function App() {
                 <p className="helper-text">We are checking missing values, duplicates, formats, and unusual values.</p>
                 <div className="analysis-bar"><span /></div>
               </section>
-            ) : quality && activeView === 'quality' ? (
+            ) : quality && (activeView === 'quality' || activeView === 'columns') ? (
               <QualityOverview
                 dataset={selectedDataset}
                 report={quality}
                 selectedIssue={selectedIssue}
                 onIssueSelect={setSelectedIssue}
                 onRefresh={() => void (async () => { setQualityLoading(true); try { setQuality(await runQuality(selectedDataset.id)); } catch (runError) { setError(runError instanceof Error ? runError.message : 'We could not analyze this dataset.'); } finally { setQualityLoading(false); } })()}
-                onOpenExplorer={(issue) => { setSelectedIssue(issue); setActiveView('explorer'); }}
+                onOpenExplorer={(issue) => { setSelectedIssue(issue); setActiveView('data'); }}
               />
             ) : null}
-            {activeView === 'explorer' ? (
+            {activeView === 'data' ? (
               <DataExplorer
                 dataset={selectedDataset}
                 report={quality}
@@ -636,7 +658,8 @@ function App() {
                 onQualityRefresh={() => void loadQuality(selectedDataset.id)}
               />
             ) : null}
-            {activeView === 'quality' ? <form className="panel form-panel" onSubmit={handleUpdate}>
+            {activeView === 'history' ? <HistoryPanel dataset={selectedDataset} report={quality} /> : null}
+            {activeView === 'overview' ? <form className="panel form-panel" onSubmit={handleUpdate}>
               <div className="panel-header">
                 <div>
                   <p className="section-kicker">Dataset details</p>
@@ -703,11 +726,6 @@ function App() {
         </main>
       </div>
 
-      <footer className="summary-bar panel">
-        <div><span>Total records</span><strong>{totalRows}</strong></div>
-        <div><span>Total columns</span><strong>{totalColumns}</strong></div>
-        <div><span>Datasets</span><strong>{datasets.length}</strong></div>
-      </footer>
     </div>
   );
 }
