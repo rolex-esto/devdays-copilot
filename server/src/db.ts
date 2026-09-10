@@ -6,7 +6,9 @@ import Database from 'better-sqlite3';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const dataDir = path.resolve(__dirname, '..', 'data');
+const dataDir = process.env.VERCEL
+  ? path.join('/tmp', 'datapulse')
+  : path.resolve(__dirname, '..', 'data');
 
 fs.mkdirSync(dataDir, { recursive: true });
 
