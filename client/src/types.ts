@@ -63,3 +63,30 @@ export interface QualityReport {
   issues: QualityIssue[];
   columns: ColumnProfile[];
 }
+
+export interface AgentActivity {
+  timestamp: string;
+  actor: string;
+  status: 'running' | 'success' | 'partial' | 'blocked' | 'failed';
+  message: string;
+}
+
+export interface AgentRun {
+  runId: string;
+  userPrompt: string;
+  intent: string;
+  selectedAgents: string[];
+  plan: string[];
+  iteration: number;
+  status: string;
+  activity: AgentActivity[];
+  results: Array<{
+    agentId: string;
+    status: string;
+    summary: string;
+    evidence: Array<{ kind: string; summary: string; value?: unknown }>;
+    recommendations?: string[];
+    requiresApproval?: boolean;
+  }>;
+  verification: { passed: boolean; summary: string } | null;
+}

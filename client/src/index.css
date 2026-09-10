@@ -178,6 +178,21 @@ body { background: #f7f8fa; color: #243142; }
 .dataset-tabs { display: flex; gap: 22px; border-bottom: 1px solid #dfe3e8; }
 .dataset-tabs button { border: 0; border-bottom: 2px solid transparent; padding: 11px 1px 10px; color: #687585; background: transparent; font-size: .84rem; font-weight: 700; }
 .dataset-tabs button:hover, .dataset-tabs button.active { border-color: #2776bd; color: #1d5f9b; }
+.agent-panel { padding: 14px 16px; }
+.agent-panel h2 { font-size: 1rem; }
+.agent-form { display: grid; grid-template-columns: 1fr auto; gap: 8px; margin-top: 12px; }
+.agent-form input { padding: 9px 11px; }
+.agent-form .primary-button { padding: 9px 14px; }
+.agent-result { margin-top: 12px; border-top: 1px solid #e4e7eb; padding-top: 12px; }
+.agent-result-header { display: flex; justify-content: space-between; gap: 12px; color: #536272; font-size: .78rem; text-transform: capitalize; }
+.agent-result-header strong { color: #285f91; }
+.agent-activity { display: grid; gap: 7px; margin: 11px 0; color: #5f6d7b; font-size: .78rem; }
+.agent-activity > div { display: flex; align-items: flex-start; gap: 7px; }
+.activity-dot { width: 7px; height: 7px; flex: 0 0 auto; margin-top: 4px; border-radius: 50%; background: #91a0ad; }
+.activity-dot.success { background: #4d9b6c; }.activity-dot.blocked, .activity-dot.failed { background: #bd6b51; }.activity-dot.running { background: #3e83bb; }
+.agent-evidence { display: grid; gap: 3px; margin-top: 8px; padding: 9px 10px; border-left: 2px solid #c8dce9; background: #f7fafc; font-size: .78rem; }
+.agent-evidence p { margin: 0; color: #536272; }.agent-evidence small { color: #657e91; }
+.agent-pass, .agent-blocked { margin: 10px 0 0; font-size: .78rem; font-weight: 700; }.agent-pass { color: #377451; }.agent-blocked { color: #9c4e42; }
 .quality-heading { padding: 8px 2px 2px; }
 .quality-heading h2 { font-size: 1.15rem; }
 .quality-hero { grid-template-columns: minmax(170px, .8fr) minmax(200px, 1fr) minmax(280px, 1.4fr); gap: 24px; padding: 18px 20px; }
@@ -238,6 +253,7 @@ th { text-transform: none; letter-spacing: 0; }
   .quality-metrics { display: grid; grid-template-columns: repeat(2, 1fr); }
   .metric-card { border-right: 1px solid #e4e7eb; }
   .issue-list-header { display: none; }
+  .agent-form { grid-template-columns: 1fr; }
   .issue-row { grid-template-columns: 10px 1fr; }
   .issue-row > .severity-text { font-size: 0; }
   .issue-row > .severity-text .severity-dot { margin: 0; }

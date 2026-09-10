@@ -91,6 +91,7 @@ The `verify` command runs linting, TypeScript checks, tests, and production buil
 - PUT /api/datasets/:id/records/:recordIndex
 - PUT /api/datasets/:id
 - DELETE /api/datasets/:id
+- POST /api/agents/run
 
 ## Automatic quality report
 
@@ -103,6 +104,18 @@ CSV imports are analyzed immediately when the dataset details view opens. The de
 - inferred column types, unique counts, numeric averages, medians, ranges, and potential outliers
 - invalid numeric values and clickable affected-row drill-down
 
-The engine is explainable and does not modify uploaded records. The `GET /api/datasets/:id/quality` endpoint recalculates the report from the stored records, so users can run the check again after a data update.
+The engine is explainable and does not modify uploaded records. Completed reports are persisted per dataset. `GET /api/datasets/:id/quality` reads the latest stored result, while `POST /api/datasets/:id/quality` runs a new deterministic analysis. Record changes mark the stored result stale instead of inventing a new score.
 
-The Data Explorer connects findings back to the stored CSV rows. It supports search, issue filters, pagination, CSV row numbers, visible cell-level issue labels, and explicit record editing. After an edit, the deterministic analyzer runs again so the displayed report reflects the saved data; no values are changed automatically.
+The Data Explorer connects findings back to the stored CSV rows. It supports search, issue filters, pagination, CSV row numbers, visible cell-level issue labels, and explicit record editing. After an edit, the previous report is marked stale and the user can explicitly run a new quality check; no values are changed automatically.
+
+## Agent orchestration
+
+DataPulse includes a bounded, deterministic-first orchestration slice at `POST /api/agents/run`. It accepts a natural-language request and a selected `datasetId`, classifies supported intent, routes only to scoped specialists, records activity, and verifies evidence before returning a result.
+
+Implemented specialists:
+
+- **Data Quality Agent** — reads the persisted quality result, ranks findings, and maps them to record indexes.
+- **Data Analyst Agent** — summarizes dataset shape and explains supported deterministic evidence.
+- **Verifier Agent** — checks that specialist evidence satisfies the task criteria.
+
+The orchestrator uses a maximum of two iterations and four agents per run. Data values, filenames, and descriptions are treated as untrusted content rather than instructions. Requests that imply mutation, deletion, replacement, or merging stop at an explicit approval gate; no agent receives write tools. Unsupported intents return a bounded blocked result instead of randomly selecting an agent.

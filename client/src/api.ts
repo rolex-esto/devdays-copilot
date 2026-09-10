@@ -1,4 +1,4 @@
-import type { Dataset, DatasetRecord, DatasetSourceType } from './types';
+import type { AgentRun, Dataset, DatasetRecord, DatasetSourceType } from './types';
 import type { QualityReport } from './types';
 
 const BASE = '/api';
@@ -28,6 +28,19 @@ export const fetchQuality = async (id: string): Promise<QualityReport> => {
 export const runQuality = async (id: string): Promise<QualityReport> => {
   const response = await fetch(`${BASE}/datasets/${id}/quality`, { method: 'POST' });
   if (!response.ok) throw new Error('We could not analyze this dataset.');
+  return response.json();
+};
+
+export const runAgent = async (prompt: string, datasetId: string): Promise<AgentRun> => {
+  const response = await fetch(`${BASE}/agents/run`, {
+    method: 'POST',
+    headers: buildHeaders(),
+    body: JSON.stringify({ prompt, datasetId })
+  });
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ message: 'DataPulse could not process that request.' }));
+    throw new Error(error.message ?? 'DataPulse could not process that request.');
+  }
   return response.json();
 };
 

@@ -2,6 +2,7 @@ import cors from 'cors';
 import express from 'express';
 import morgan from 'morgan';
 import datasetRouter from './routes/datasets.js';
+import agentRouter from './routes/agents.js';
 
 export const app = express();
 
@@ -14,6 +15,7 @@ app.get('/api/health', (_req, res) => {
 });
 
 app.use('/api/datasets', datasetRouter);
+app.use('/api/agents', agentRouter);
 
 app.use((req, res) => {
   res.status(404).json({ message: `Route not found: ${req.originalUrl}` });

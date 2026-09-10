@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
-import { createDataset, deleteDataset, fetchDatasets, fetchQuality, importCsvDataset, runQuality, updateDataset, updateDatasetRecord } from './api';
-import type { Dataset, DatasetRecord, DatasetSourceType, QualityIssue, QualityReport } from './types';
+import { createDataset, deleteDataset, fetchDatasets, fetchQuality, importCsvDataset, runAgent, runQuality, updateDataset, updateDatasetRecord } from './api';
+import type { AgentRun, Dataset, DatasetRecord, DatasetSourceType, QualityIssue, QualityReport } from './types';
 
 const emptyForm = {
   name: '',
@@ -277,6 +277,39 @@ function HistoryPanel({ dataset, report }: { dataset: Dataset; report: QualityRe
       <table className="history-table"><thead><tr><th>Run</th><th>Score</th><th>Status</th></tr></thead><tbody>
         <tr><td>{report?.last_analyzed_at ? new Date(report.last_analyzed_at).toLocaleString() : 'No run yet'}</td><td>{report?.score ?? '—'}</td><td><span className={`status-badge ${dataset.analysis_status.toLowerCase()}`}>{dataset.analysis_status.replace('_', ' ')}</span></td></tr>
       </tbody></table>
+    </section>
+  );
+}
+
+function AskDataPulse({ dataset, onError }: { dataset: Dataset; onError: (message: string) => void }) {
+  const [prompt, setPrompt] = useState('');
+  const [run, setRun] = useState<AgentRun | null>(null);
+  const [running, setRunning] = useState(false);
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!prompt.trim()) return;
+    setRunning(true);
+    try {
+      setRun(await runAgent(prompt, dataset.id));
+    } catch (error) {
+      onError(error instanceof Error ? error.message : 'DataPulse could not process that request.');
+    } finally {
+      setRunning(false);
+    }
+  };
+  return (
+    <section className="agent-panel panel">
+      <div className="section-title-row"><div><p className="section-kicker">Ask DataPulse</p><h2>Get an evidence-based answer</h2></div><span className="muted">Read-only by default</span></div>
+      <form className="agent-form" onSubmit={submit}>
+        <input value={prompt} onChange={(event) => setPrompt(event.target.value)} placeholder="Find the biggest quality problems and what to fix first" aria-label="Ask DataPulse" />
+        <button type="submit" className="primary-button" disabled={running || !prompt.trim()}>{running ? 'Running…' : 'Ask'}</button>
+      </form>
+      {run ? <div className="agent-result" aria-live="polite">
+        <div className="agent-result-header"><strong>{run.status.replaceAll('_', ' ')}</strong><span>{run.intent.replaceAll('_', ' ')} · {run.iteration} iteration</span></div>
+        <div className="agent-activity">{run.activity.map((entry, index) => <div key={`${entry.timestamp}-${index}`}><span className={`activity-dot ${entry.status}`} /> <span><strong>{entry.actor}</strong> {entry.message}</span></div>)}</div>
+        {run.results.filter((result) => result.agentId !== 'orchestrator').map((result) => <div className="agent-evidence" key={result.agentId}><strong>{result.agentId.replaceAll('-', ' ')}</strong><p>{result.summary}</p>{result.recommendations?.map((recommendation) => <small key={recommendation}>{recommendation}</small>)}</div>)}
+        {run.verification ? <p className={run.verification.passed ? 'agent-pass' : 'agent-blocked'}>{run.verification.summary}</p> : null}
+      </div> : null}
     </section>
   );
 }
@@ -631,6 +664,7 @@ function App() {
             <nav className="dataset-tabs" aria-label="Dataset sections">
               {(['overview', 'data', 'columns', 'quality', 'history'] as const).map((tab) => <button type="button" key={tab} className={activeView === tab ? 'active' : ''} aria-current={activeView === tab ? 'page' : undefined} onClick={() => setActiveView(tab)}>{tab[0].toUpperCase() + tab.slice(1)}</button>)}
             </nav>
+            <AskDataPulse dataset={selectedDataset} onError={setError} />
             {qualityLoading ? (
               <section className="panel analysis-panel" aria-live="polite">
                 <p className="section-kicker">Data quality check</p>
