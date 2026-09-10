@@ -34,6 +34,28 @@ describe('Phase 2B bounded analytics', () => {
     expect(response.body.verification.passed).toBe(true);
   });
 
+  it('routes natural-language revenue requests to grounded SQL', async () => {
+    const dataset = await request(app).post('/api/datasets').send({
+      name: 'Revenue',
+      records: [
+        { payment_method: 'Cash', revenue: 10 },
+        { payment_method: 'Card', revenue: 25 },
+        { payment_method: 'Card', revenue: 5 }
+      ]
+    });
+
+    const response = await request(app).post('/api/agents/run').send({
+      datasetId: dataset.body.id,
+      prompt: 'Which payment method generated the most revenue?'
+    });
+    const sql = response.body.results.find((result: { agentId: string }) => result.agentId === 'sql');
+
+    expect(response.body.status).toBe('COMPLETED');
+    expect(response.body.intent).toBe('data_analysis');
+    expect(sql.evidence.find((item: { kind: string }) => item.kind === 'sql').value).toContain('SUM');
+    expect(sql.evidence.find((item: { kind: string }) => item.kind === 'sql_result').value.rows[0].payment_method).toBe('Card');
+  });
+
   it('rejects analytical SQL that references a column outside the dataset schema', async () => {
     const dataset = await request(app).post('/api/datasets').send({
       name: 'Grounded schema',

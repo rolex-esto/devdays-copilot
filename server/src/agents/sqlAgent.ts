@@ -104,9 +104,16 @@ export const executeReadOnlySql = (
 
 const queryForPrompt = (prompt: string, dataset: Dataset) => {
   const columns = [...new Set(dataset.records.flatMap((record) => Object.keys(record)))];
-  const numeric = columns.find((column) => dataset.records.some((record) => typeof record[column] === 'number'));
-  const category = columns.find((column) => dataset.records.some((record) => typeof record[column] === 'string'));
+  const numeric = columns.find((column) => /(revenue|sales|amount|total|price|cost|value|quantity|qty)/i.test(column)
+    && dataset.records.some((record) => typeof record[column] === 'number' || (typeof record[column] === 'string' && /^[-+]?\d+(?:\.\d+)?$/.test(record[column]))))
+    ?? columns.find((column) => dataset.records.some((record) => typeof record[column] === 'number'));
+  const category = columns.find((column) => /(payment|method|product|item|category|status|type|name)/i.test(column)
+    && dataset.records.some((record) => typeof record[column] === 'string'))
+    ?? columns.find((column) => dataset.records.some((record) => typeof record[column] === 'string'));
   const lower = prompt.toLowerCase();
+  if (numeric && category && /\b(most|highest|top|best|generated|revenue|sales)\b/.test(lower)) {
+    return `SELECT "${category}", SUM(CAST("${numeric}" AS REAL)) AS total_${numeric} FROM dataset GROUP BY "${category}" ORDER BY total_${numeric} DESC LIMIT 1`;
+  }
   if (numeric && /\b(average|avg|mean)\b/.test(lower)) return `SELECT ${category ? `"${category}", ` : ''}AVG("${numeric}") AS average_${numeric}${category ? ` FROM dataset GROUP BY "${category}"` : ' FROM dataset'}`;
   if (numeric && /\b(sum|total)\b/.test(lower)) return `SELECT ${category ? `"${category}", ` : ''}SUM("${numeric}") AS total_${numeric}${category ? ` FROM dataset GROUP BY "${category}"` : ' FROM dataset'}`;
   if (/\b(count|how many|number of)\b/.test(lower)) return category ? `SELECT "${category}", COUNT(*) AS count FROM dataset GROUP BY "${category}"` : 'SELECT COUNT(*) AS count FROM dataset';

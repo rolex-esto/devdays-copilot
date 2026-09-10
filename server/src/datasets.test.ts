@@ -133,4 +133,17 @@ describe('dataset API', () => {
     expect(response.body.records[0]).toEqual({ amount: '12.50', status: 'Open' });
     expect(response.body.row_count).toBe(1);
   });
+
+  it('does not score an empty dataset as excellent', async () => {
+    const created = await request(app)
+      .post('/api/datasets')
+      .send({ name: 'Empty data', records: [] });
+
+    const report = await request(app).post(`/api/datasets/${created.body.id}/quality`);
+
+    expect(report.status).toBe(200);
+    expect(report.body.analysis_status).toBe('EMPTY');
+    expect(report.body.score).toBeNull();
+    expect(report.body.label).toBe('No data');
+  });
 });

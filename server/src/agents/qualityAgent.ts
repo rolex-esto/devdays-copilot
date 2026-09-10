@@ -11,7 +11,8 @@ export const dataQualityAgent: AgentDefinition = {
     if (!dataset) {
       return { agentId: 'data-quality', status: 'blocked', summary: 'A dataset is required for quality analysis.', evidence: [], errors: ['datasetId is required'] };
     }
-    if (!qualityReport || (qualityReport.analysis_status !== 'COMPLETED' && qualityReport.analysis_status !== 'STALE')) {
+    const hasUsableReport = qualityReport?.analysis_status === 'COMPLETED';
+    if (!hasUsableReport || !qualityReport) {
       return { agentId: 'data-quality', status: 'partial', summary: 'No completed quality report is available yet.', evidence: [{ kind: 'dataset', summary: `${dataset.name} is ${dataset.analysis_status.toLowerCase().replace('_', ' ')}` }], recommendations: ['Run a quality check before reviewing findings.'] };
     }
     const findings = [...qualityReport.issues].sort((left, right) => {

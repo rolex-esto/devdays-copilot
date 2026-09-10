@@ -169,12 +169,12 @@ export const updateDataset = (id: string, input: DatasetUpdateInput) => {
   return updated;
 };
 
-export const saveQualityReport = (id: string, report: string, score: number, analyzedAt: string, analysisRunId: string) => {
+export const saveQualityReport = (id: string, report: string, score: number | null, analyzedAt: string, analysisRunId: string, status: 'COMPLETED' | 'EMPTY' = 'COMPLETED') => {
   const result = db.prepare(
     `UPDATE datasets
-     SET analysis_status = 'COMPLETED', last_analyzed_at = ?, quality_score = ?, analysis_run_id = ?, quality_report = ?
+     SET analysis_status = ?, last_analyzed_at = ?, quality_score = ?, analysis_run_id = ?, quality_report = ?
      WHERE id = ?`
-  ).run(analyzedAt, score, analysisRunId, report, id);
+  ).run(status, analyzedAt, score, analysisRunId, report, id);
   return result.changes > 0 ? getDatasetById(id) : null;
 };
 

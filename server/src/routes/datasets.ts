@@ -67,7 +67,7 @@ const emptyQualityReport = (status: string) => ({
   analysis_run_id: null,
   analyzed_at: '',
   score: null,
-  label: status === 'STALE' ? 'Stale analysis' : status === 'FAILED' ? 'Analysis failed' : status === 'ANALYZING' ? 'Analyzing dataset...' : 'Not analyzed yet',
+  label: status === 'EMPTY' ? 'No data' : status === 'STALE' ? 'Stale analysis' : status === 'FAILED' ? 'Analysis failed' : status === 'ANALYZING' ? 'Analyzing dataset...' : 'Not analyzed yet',
   total_issues: 0,
   affected_rows: 0,
   summary: { rows: 0, columns: 0, missing_values: 0, duplicate_rows: 0, invalid_values: 0, potential_outliers: 0 },
@@ -91,8 +91,8 @@ router.post('/:id/quality', (req, res) => {
   const analysisRunId = randomUUID();
   try {
     const report = analyzeDataset(dataset.records);
-    const saved = saveQualityReport(dataset.id, JSON.stringify(report), report.score, report.analyzed_at, analysisRunId);
-    return res.json({ ...report, analysis_status: 'COMPLETED', last_analyzed_at: report.analyzed_at, analysis_run_id: saved?.analysis_run_id ?? analysisRunId });
+    const saved = saveQualityReport(dataset.id, JSON.stringify(report), report.score, report.analyzed_at, analysisRunId, report.analysis_status);
+    return res.json({ ...report, last_analyzed_at: report.analyzed_at, analysis_run_id: saved?.analysis_run_id ?? analysisRunId });
   } catch (error) {
     return res.status(500).json({ ...emptyQualityReport('FAILED'), message: error instanceof Error ? error.message : 'We could not analyze this dataset.' });
   }

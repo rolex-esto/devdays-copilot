@@ -114,11 +114,11 @@ function QualityOverview({
         </div>
         <div className="score-copy">
           <p className="section-kicker">Data quality score</p>
-          <h3>{report.analysis_status === 'NOT_ANALYZED' ? 'Not analyzed yet' : report.analysis_status === 'STALE' ? 'Stale analysis' : report.analysis_status === 'FAILED' ? 'Analysis failed' : report.analysis_status === 'ANALYZING' ? 'Analyzing dataset...' : report.label}</h3>
-          <p>{report.analysis_status === 'NOT_ANALYZED' ? 'Run a quality check to generate a score.' : report.analysis_status === 'STALE' ? 'This dataset changed after the last quality check. Run the check again to refresh the score.' : report.analysis_status === 'FAILED' ? 'We could not calculate a quality score for this dataset.' : report.analysis_status === 'ANALYZING' ? 'We are checking this dataset now.' : report.total_issues === 0 ? 'No major issues detected by the configured checks.' : `${report.total_issues} issue types affect ${report.affected_rows} records.`}</p>
+          <h3>{report.analysis_status === 'EMPTY' ? 'No data to analyze' : report.analysis_status === 'NOT_ANALYZED' ? 'Not analyzed yet' : report.analysis_status === 'STALE' ? 'Stale analysis' : report.analysis_status === 'FAILED' ? 'Analysis failed' : report.analysis_status === 'ANALYZING' ? 'Analyzing dataset...' : report.label}</h3>
+          <p>{report.analysis_status === 'EMPTY' ? 'Add at least one row before running a quality check.' : report.analysis_status === 'NOT_ANALYZED' ? 'Run a quality check to generate a score.' : report.analysis_status === 'STALE' ? 'This dataset changed after the last quality check. Run the check again to refresh the score.' : report.analysis_status === 'FAILED' ? 'We could not calculate a quality score for this dataset.' : report.analysis_status === 'ANALYZING' ? 'We are checking this dataset now.' : report.total_issues === 0 ? 'No major issues detected by the configured checks.' : `${report.total_issues} issue types affect ${report.affected_rows} records.`}</p>
           {report.last_analyzed_at && report.analysis_status !== 'NOT_ANALYZED' ? <small>Last analyzed: {new Date(report.last_analyzed_at).toLocaleString()}</small> : null}
         </div>
-        {report.analysis_status !== 'NOT_ANALYZED' && report.analysis_status !== 'FAILED' && report.analysis_status !== 'ANALYZING' ? <div className="dimension-list">
+        {report.analysis_status !== 'NOT_ANALYZED' && report.analysis_status !== 'EMPTY' && report.analysis_status !== 'FAILED' && report.analysis_status !== 'ANALYZING' ? <div className="dimension-list">
           {Object.entries(report.dimensions).map(([name, value]) => (
             <div key={name}><span>{name}</span><strong>{value}%</strong><i><em style={{ width: `${value}%` }} /></i></div>
           ))}
@@ -143,7 +143,7 @@ function QualityOverview({
           </div>
           {recommendation.actionLabel ? <button type="button" className="primary-button recommendation-action" onClick={() => setSeverityFilter(recommendation.priority)}>{recommendation.actionLabel} →</button> : null}
         </div> : null}
-        {report.analysis_status !== 'COMPLETED' && report.analysis_status !== 'STALE' ? <p className="empty-report">{report.analysis_status === 'NOT_ANALYZED' ? 'Run a quality check to see findings and column health.' : 'Findings are unavailable until the quality check finishes.'}</p> : report.issues.length === 0 ? <p className="empty-report">Everything looks healthy based on the checks we can run.</p> : (
+        {report.analysis_status !== 'COMPLETED' && report.analysis_status !== 'STALE' ? <p className="empty-report">{report.analysis_status === 'EMPTY' ? 'Add rows to generate findings and column health.' : report.analysis_status === 'NOT_ANALYZED' ? 'Run a quality check to see findings and column health.' : 'Findings are unavailable until the quality check finishes.'}</p> : report.issues.length === 0 ? <p className="empty-report">Everything looks healthy based on the checks we can run.</p> : (
           <>
             <div className="filter-label">Filter issues</div>
             <div className="severity-row">

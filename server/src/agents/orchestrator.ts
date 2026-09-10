@@ -17,7 +17,7 @@ const classifyIntent = (prompt: string): AgentIntent => {
   const text = prompt.toLowerCase();
   if (/\b(delete|drop|remove|overwrite|replace|merge|bulk\s+clean)\b/.test(text)) return 'data_cleaning';
   if (/\b(quality|issue|finding|duplicate|missing|invalid|score|cleanest|problems)\b/.test(text)) return 'data_quality';
-  if (/\b(analy[sz]e|analysis|summari[sz]e|summary|trend|insight|compare)\b/.test(text)) return 'data_analysis';
+  if (/\b(analy[sz]e|analysis|summari[sz]e|summary|trend|insight|compare|most|highest|lowest|top|revenue|sales|selling|generated)\b/.test(text)) return 'data_analysis';
   if (/\b(chart|visual|plot|graph)\b/.test(text)) return 'visualization';
   if (/\b(sql|query)\b/.test(text)) return 'database';
   if (/\b(bug|broken|error|debug)\b/.test(text)) return 'debugging';

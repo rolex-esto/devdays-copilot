@@ -1,5 +1,5 @@
 export type DatasetSourceType = 'CSV' | 'Manual' | 'Generated Sample';
-export type AnalysisStatus = 'NOT_ANALYZED' | 'ANALYZING' | 'COMPLETED' | 'FAILED' | 'STALE';
+export type AnalysisStatus = 'NOT_ANALYZED' | 'ANALYZING' | 'COMPLETED' | 'FAILED' | 'STALE' | 'EMPTY';
 
 export type DatasetRecord = Record<string, string | number | boolean | null>;
 

@@ -32,12 +32,12 @@ export interface ColumnProfile {
 }
 
 export interface QualityReport {
-  analysis_status: 'COMPLETED';
+  analysis_status: 'COMPLETED' | 'EMPTY';
   last_analyzed_at: string;
   analysis_run_id: string | null;
   analyzed_at: string;
-  score: number;
-  label: 'Excellent' | 'Good' | 'Needs Attention' | 'Poor' | 'Critical';
+  score: number | null;
+  label: 'Excellent' | 'Good' | 'Needs Attention' | 'Poor' | 'Critical' | 'No data';
   total_issues: number;
   affected_rows: number;
   summary: {
@@ -124,6 +124,23 @@ const qualityLabel = (score: number): QualityReport['label'] => {
 
 export const analyzeDataset = (records: DatasetRecord[]): QualityReport => {
   const rows = records ?? [];
+  if (rows.length === 0) {
+    const analyzedAt = new Date().toISOString();
+    return {
+      analysis_status: 'EMPTY',
+      last_analyzed_at: analyzedAt,
+      analysis_run_id: null,
+      analyzed_at: analyzedAt,
+      score: null,
+      label: 'No data',
+      total_issues: 0,
+      affected_rows: 0,
+      summary: { rows: 0, columns: 0, missing_values: 0, duplicate_rows: 0, invalid_values: 0, potential_outliers: 0 },
+      dimensions: { completeness: 0, uniqueness: 0, validity: 0, consistency: 0 },
+      issues: [],
+      columns: []
+    };
+  }
   const columnNames = [...new Set(rows.flatMap((row) => Object.keys(row)))];
   const issues: QualityIssue[] = [];
   const profiles: ColumnProfile[] = [];
