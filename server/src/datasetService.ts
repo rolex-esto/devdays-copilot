@@ -148,3 +148,10 @@ export const deleteDataset = (id: string) => {
   const result = db.prepare('DELETE FROM datasets WHERE id = ?').run(id);
   return result.changes > 0;
 };
+
+export const updateDatasetRecord = (id: string, recordIndex: number, record: DatasetRecord) => {
+  const existing = getDatasetById(id);
+  if (!existing || recordIndex < 0 || recordIndex >= existing.records.length) return null;
+  const records = existing.records.map((item, index) => (index === recordIndex ? record : item));
+  return updateDataset(id, { records });
+};

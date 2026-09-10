@@ -88,6 +88,7 @@ The `verify` command runs linting, TypeScript checks, tests, and production buil
 - POST /api/datasets/import-csv
 - GET /api/datasets/:id
 - GET /api/datasets/:id/quality
+- PUT /api/datasets/:id/records/:recordIndex
 - PUT /api/datasets/:id
 - DELETE /api/datasets/:id
 
@@ -103,3 +104,5 @@ CSV imports are analyzed immediately when the dataset details view opens. The de
 - invalid numeric values and clickable affected-row drill-down
 
 The engine is explainable and does not modify uploaded records. The `GET /api/datasets/:id/quality` endpoint recalculates the report from the stored records, so users can run the check again after a data update.
+
+The Data Explorer connects findings back to the stored CSV rows. It supports search, issue filters, pagination, CSV row numbers, visible cell-level issue labels, and explicit record editing. After an edit, the deterministic analyzer runs again so the displayed report reflects the saved data; no values are changed automatically.

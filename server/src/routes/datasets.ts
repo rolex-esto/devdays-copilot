@@ -1,6 +1,6 @@
 import express, { Router } from 'express';
 import { z } from 'zod';
-import { createDataset, deleteDataset, getDatasetById, listDatasets, updateDataset } from '../datasetService.js';
+import { createDataset, deleteDataset, getDatasetById, listDatasets, updateDataset, updateDatasetRecord } from '../datasetService.js';
 import { parseCsv } from '../csv.js';
 import { analyzeDataset } from '../quality.js';
 
@@ -66,6 +66,16 @@ router.get('/:id/quality', (req, res) => {
     return res.status(404).json({ message: 'Dataset not found' });
   }
   return res.json(analyzeDataset(dataset.records));
+});
+
+router.put('/:id/records/:recordIndex', (req, res) => {
+  const recordIndex = Number(req.params.recordIndex);
+  if (!Number.isInteger(recordIndex) || recordIndex < 0 || !req.body || typeof req.body !== 'object' || Array.isArray(req.body)) {
+    return res.status(400).json({ message: 'A valid record and row number are required.' });
+  }
+  const updated = updateDatasetRecord(req.params.id, recordIndex, req.body);
+  if (!updated) return res.status(404).json({ message: 'Dataset or record not found' });
+  return res.json(updated);
 });
 
 router.get('/:id', (req, res) => {

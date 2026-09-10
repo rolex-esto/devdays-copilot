@@ -97,4 +97,18 @@ describe('dataset API', () => {
       expect.objectContaining({ name: 'Quantity', inferred_type: 'number' })
     ]));
   });
+
+  it('updates one stored record without replacing the dataset', async () => {
+    const created = await request(app)
+      .post('/api/datasets')
+      .send({ name: 'Editable data', records: [{ amount: 'ERROR', status: 'Open' }] });
+
+    const response = await request(app)
+      .put(`/api/datasets/${created.body.id}/records/0`)
+      .send({ amount: '12.50', status: 'Open' });
+
+    expect(response.status).toBe(200);
+    expect(response.body.records[0]).toEqual({ amount: '12.50', status: 'Open' });
+    expect(response.body.row_count).toBe(1);
+  });
 });

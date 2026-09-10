@@ -25,6 +25,19 @@ export const fetchQuality = async (id: string): Promise<QualityReport> => {
   return response.json();
 };
 
+export const updateDatasetRecord = async (datasetId: string, recordIndex: number, record: DatasetRecord): Promise<Dataset> => {
+  const response = await fetch(`${BASE}/datasets/${datasetId}/records/${recordIndex}`, {
+    method: 'PUT',
+    headers: buildHeaders(),
+    body: JSON.stringify(record)
+  });
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ message: 'We could not save this record.' }));
+    throw new Error(error.message ?? 'We could not save this record.');
+  }
+  return response.json();
+};
+
 export const createDataset = async (payload: {
   name: string;
   description?: string;

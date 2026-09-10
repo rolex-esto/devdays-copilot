@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
-import { createDataset, deleteDataset, fetchDatasets, fetchQuality, importCsvDataset, updateDataset } from './api';
+import { createDataset, deleteDataset, fetchDatasets, fetchQuality, importCsvDataset, updateDataset, updateDatasetRecord } from './api';
 import type { Dataset, DatasetRecord, DatasetSourceType, QualityIssue, QualityReport } from './types';
 
 const emptyForm = {
@@ -23,13 +23,15 @@ function QualityOverview({
   report,
   selectedIssue,
   onIssueSelect,
-  onRefresh
+  onRefresh,
+  onOpenExplorer
 }: {
   dataset: Dataset;
   report: QualityReport;
   selectedIssue: QualityIssue | null;
   onIssueSelect: IssueSelectionHandler;
   onRefresh: () => void;
+  onOpenExplorer: (issue: QualityIssue) => void;
 }) {
   const affectedRecords = selectedIssue
     ? selectedIssue.record_indexes.map((index) => ({ index, record: dataset.records[index] })).filter((item) => item.record)
@@ -84,7 +86,7 @@ function QualityOverview({
                 <button type="button" key={issue.id} className={`issue-row ${selectedIssue?.id === issue.id ? 'selected' : ''}`} onClick={() => onIssueSelect(selectedIssue?.id === issue.id ? null : issue)}>
                   <span className={`severity-dot ${issue.severity}`} aria-label={`${severityLabel(issue.severity)} severity`} />
                   <span><strong>{issue.message}</strong><small>{issue.column_name ?? 'Dataset-wide'} · {issue.affected_rows} affected rows</small></span>
-                  <span className="issue-action">View rows →</span>
+                  <span className="issue-action" onClick={(event) => { event.stopPropagation(); onOpenExplorer(issue); }}>View rows →</span>
                 </button>
               ))}
             </div>
@@ -105,9 +107,88 @@ function QualityOverview({
       <div className="quality-section panel">
         <div className="section-title-row"><div><p className="section-kicker">Automatic profiling</p><h3>Column health</h3></div><span className="muted">Click a finding above to inspect rows</span></div>
         <div className="column-table-wrap"><table><thead><tr><th>Column</th><th>Type</th><th>Missing</th><th>Unique</th><th>Average</th><th>Outliers</th></tr></thead>
-          <tbody>{report.columns.map((column) => <tr key={column.name}><td><strong>{column.name}</strong></td><td><span className="type-badge">{column.inferred_type}</span></td><td>{column.null_values} <small>({column.missing_percentage}%)</small></td><td>{column.unique_values}</td><td>{column.average_value ?? '—'}</td><td>{column.outlier_count}</td></tr>)}</tbody>
+          <tbody>{report.columns.map((column) => <tr key={column.name} className="clickable-row" onClick={() => onOpenExplorer(report.issues.find((issue) => issue.column_name === column.name) ?? { id: `column-${column.name}`, severity: 'low', issue_type: 'column', column_name: column.name, message: `Records with findings in ${column.name}`, affected_rows: 0, record_indexes: [] })}><td><strong>{column.name}</strong></td><td><span className="type-badge">{column.inferred_type}</span></td><td>{column.null_values} <small>({column.missing_percentage}%)</small></td><td>{column.unique_values}</td><td>{column.average_value ?? '—'}</td><td>{column.outlier_count}</td></tr>)}</tbody>
         </table></div>
       </div>
+    </section>
+  );
+}
+
+function DataExplorer({
+  dataset,
+  report,
+  initialIssue,
+  onBack,
+  onDatasetChange,
+  onQualityRefresh
+}: {
+  dataset: Dataset;
+  report: QualityReport | null;
+  initialIssue: QualityIssue | null;
+  onBack: () => void;
+  onDatasetChange: (dataset: Dataset) => void;
+  onQualityRefresh: () => void;
+}) {
+  const [search, setSearch] = useState('');
+  const [rowFilter, setRowFilter] = useState<'all' | 'issues' | 'clean'>('all');
+  const [issueFilter, setIssueFilter] = useState('all');
+  const [page, setPage] = useState(0);
+  const [editingIndex, setEditingIndex] = useState<number | null>(null);
+  const [editRecord, setEditRecord] = useState<DatasetRecord>({});
+  const [saving, setSaving] = useState(false);
+  const pageSize = 25;
+  const issueIndexes = useMemo(() => new Set((report?.issues ?? []).flatMap((issue) => issue.record_indexes)), [report]);
+  const initialIndexes = useMemo(() => new Set(initialIssue?.record_indexes ?? []), [initialIssue]);
+  const columns = useMemo(() => [...new Set(dataset.records.flatMap((record) => Object.keys(record)))], [dataset.records]);
+  const filtered = useMemo(() => dataset.records.map((record, index) => ({ record, index })).filter(({ record, index }) => {
+    const matchesSearch = !search.trim() || Object.values(record).some((value) => String(value ?? '').toLowerCase().includes(search.toLowerCase()));
+    const hasIssue = issueIndexes.has(index);
+    const matchesRows = rowFilter === 'all' || (rowFilter === 'issues' ? hasIssue : !hasIssue);
+    const matchesIssue = issueFilter === 'all' || (report?.issues.some((issue) => issue.issue_type === issueFilter && issue.record_indexes.includes(index)) ?? false);
+    return matchesSearch && matchesRows && matchesIssue;
+  }), [dataset.records, issueFilter, issueIndexes, report, rowFilter, search]);
+  const visible = filtered.slice(page * pageSize, (page + 1) * pageSize);
+
+  useEffect(() => {
+    if (initialIssue) {
+      setRowFilter('issues');
+      setIssueFilter(initialIssue.issue_type === 'column' ? 'all' : initialIssue.issue_type);
+      setPage(0);
+    }
+  }, [initialIssue]);
+
+  const saveRecord = async () => {
+    if (editingIndex === null) return;
+    setSaving(true);
+    try {
+      const updated = await updateDatasetRecord(dataset.id, editingIndex, editRecord);
+      onDatasetChange(updated);
+      setEditingIndex(null);
+      onQualityRefresh();
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <section className="explorer panel">
+      <div className="explorer-header">
+        <div><p className="section-kicker">Datasets / {dataset.name} / Data Explorer</p><h2>View CSV data</h2><p className="helper-text">{dataset.row_count.toLocaleString()} rows · {dataset.column_count} columns</p></div>
+        <button type="button" className="quiet-button" onClick={onBack}>← Back to quality overview</button>
+      </div>
+      {initialIssue ? <div className="filter-callout"><strong>Showing records affected by:</strong> {initialIssue.message} · {initialIssue.column_name ?? 'Dataset-wide'} <button type="button" className="text-button" onClick={() => { setRowFilter('all'); setIssueFilter('all'); }}>Clear filter</button></div> : null}
+      <div className="explorer-controls">
+        <input value={search} onChange={(event) => { setSearch(event.target.value); setPage(0); }} placeholder="Search records..." aria-label="Search records" />
+        <select value={rowFilter} onChange={(event) => { setRowFilter(event.target.value as typeof rowFilter); setPage(0); }} aria-label="Row filter"><option value="all">All records</option><option value="issues">Records with issues</option><option value="clean">Clean records</option></select>
+        <select value={issueFilter} onChange={(event) => { setIssueFilter(event.target.value); setPage(0); }} aria-label="Issue type filter"><option value="all">All issue types</option>{[...new Set((report?.issues ?? []).map((issue) => issue.issue_type))].map((type) => <option key={type} value={type}>{type.replaceAll('_', ' ')}</option>)}</select>
+      </div>
+      {visible.length === 0 ? <div className="empty-report">No records match the current filters.</div> : (
+        <div className="explorer-table-wrap"><table className="explorer-table"><thead><tr><th>CSV row</th>{columns.map((column) => <th key={column}>{column}</th>)}<th>Action</th></tr></thead><tbody>
+          {visible.map(({ record, index }) => <tr key={index} className={initialIndexes.has(index) ? 'focused-row' : ''}><td>{index + 2}</td>{columns.map((column) => { const issue = report?.issues.find((finding) => finding.record_indexes.includes(index) && finding.column_name === column); return <td key={column} className={issue ? `quality-cell ${issue.severity}` : ''}>{issue ? <span className="cell-flag" title={issue.message}>{issue.issue_type === 'missing_values' ? '⚠ Missing' : issue.issue_type === 'potential_outlier' ? 'ⓘ Outlier' : '✕ Invalid'}</span> : null}<span>{String(record[column] ?? '—')}</span></td>; })}<td><button type="button" className="text-button" onClick={() => { setEditingIndex(index); setEditRecord({ ...record }); }}>Edit</button></td></tr>)}
+        </tbody></table></div>
+      )}
+      <div className="pagination"><span>Showing {filtered.length ? page * pageSize + 1 : 0}–{Math.min((page + 1) * pageSize, filtered.length)} of {filtered.length}</span><div><button type="button" className="quiet-button" disabled={page === 0} onClick={() => setPage((current) => current - 1)}>← Previous</button><button type="button" className="quiet-button" disabled={(page + 1) * pageSize >= filtered.length} onClick={() => setPage((current) => current + 1)}>Next →</button></div></div>
+      {editingIndex !== null ? <div className="edit-record panel"><div className="section-title-row"><div><p className="section-kicker">CSV Row {editingIndex + 2}</p><h3>Edit record</h3></div><button type="button" className="quiet-button" onClick={() => setEditingIndex(null)}>Cancel</button></div>{columns.map((column) => <label key={column}>{column}<input value={String(editRecord[column] ?? '')} onChange={(event) => setEditRecord((current) => ({ ...current, [column]: event.target.value }))} /></label>)}<button type="button" className="primary-button" disabled={saving} onClick={() => void saveRecord()}>{saving ? 'Saving...' : 'Save record'}</button></div> : null}
     </section>
   );
 }
@@ -128,6 +209,7 @@ function App() {
   const [quality, setQuality] = useState<QualityReport | null>(null);
   const [qualityLoading, setQualityLoading] = useState(false);
   const [selectedIssue, setSelectedIssue] = useState<QualityIssue | null>(null);
+  const [activeView, setActiveView] = useState<'quality' | 'explorer'>('quality');
 
   const selectedDataset = useMemo(
     () => datasets.find((dataset) => dataset.id === selectedId) ?? null,
@@ -177,6 +259,7 @@ function App() {
           setSelectedId(current.id);
           setQuality(await fetchQuality(current.id));
           setError('');
+          setActiveView('quality');
           return;
         }
       } catch {
@@ -221,6 +304,7 @@ function App() {
       const dataset = await createDataset(payload);
       setDatasets((current) => [dataset, ...current]);
       setSelectedId(dataset.id);
+      setActiveView('quality');
       setIsCreating(false);
       setStatus(`"${dataset.name}" is ready to explore.`);
     } catch (submitError) {
@@ -462,16 +546,27 @@ function App() {
                 <p className="helper-text">We are checking missing values, duplicates, formats, and unusual values.</p>
                 <div className="analysis-bar"><span /></div>
               </section>
-            ) : quality ? (
+            ) : quality && activeView === 'quality' ? (
               <QualityOverview
                 dataset={selectedDataset}
                 report={quality}
                 selectedIssue={selectedIssue}
                 onIssueSelect={setSelectedIssue}
                 onRefresh={() => void loadQuality(selectedDataset.id)}
+                onOpenExplorer={(issue) => { setSelectedIssue(issue); setActiveView('explorer'); }}
               />
             ) : null}
-            <form className="panel form-panel" onSubmit={handleUpdate}>
+            {activeView === 'explorer' ? (
+              <DataExplorer
+                dataset={selectedDataset}
+                report={quality}
+                initialIssue={selectedIssue}
+                onBack={() => setActiveView('quality')}
+                onDatasetChange={(updated) => setDatasets((current) => current.map((item) => item.id === updated.id ? updated : item))}
+                onQualityRefresh={() => void loadQuality(selectedDataset.id)}
+              />
+            ) : null}
+            {activeView === 'quality' ? <form className="panel form-panel" onSubmit={handleUpdate}>
               <div className="panel-header">
                 <div>
                   <p className="section-kicker">Dataset details</p>
@@ -515,7 +610,7 @@ function App() {
                   {isSubmitting ? 'Saving...' : 'Save changes'}
                 </button>
               </div>
-            </form>
+            </form> : null}
             </>
           ) : (
             <section className="panel welcome-panel">
