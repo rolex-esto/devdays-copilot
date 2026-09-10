@@ -69,6 +69,25 @@ describe('dataset API', () => {
     });
   });
 
+  it('imports a dirty-cafe-sized CSV and persists it', async () => {
+    const rows = Array.from({ length: 750 }, (_, index) => (
+      `${index + 1},${index % 4 + 1},${(index % 17 + 1) * 5}.00,${index % 2 ? 'Card' : 'Cash'}`
+    ));
+    const csv = `Transaction ID,Quantity,Price Per Unit,Payment Method\n${rows.join('\n')}\n`;
+
+    const response = await request(app)
+      .post('/api/datasets/import-csv?name=Dirty%20Cafe%20Sales&file_name=dirty_cafe_sales.csv')
+      .set('Content-Type', 'text/csv')
+      .send(csv);
+
+    expect(response.status).toBe(201);
+    expect(response.body.row_count).toBe(750);
+
+    const persisted = await request(app).get(`/api/datasets/${response.body.id}`);
+    expect(persisted.status).toBe(200);
+    expect(persisted.body.records).toHaveLength(750);
+  });
+
   it('rejects malformed CSV rows instead of silently dropping them', async () => {
     const response = await request(app)
       .post('/api/datasets/import-csv?name=Broken%20orders')
@@ -76,7 +95,35 @@ describe('dataset API', () => {
       .send('order_id,amount\nA-1,1250,unexpected\n');
 
     expect(response.status).toBe(400);
-    expect(response.body.message).toContain('expected 2');
+    expect(response.body.message).toBe('CSV could not be parsed.');
+  });
+
+  it('rejects a CSV larger than the upload limit', async () => {
+    const oversizedCsv = `name\n${'x'.repeat(4 * 1024 * 1024)}\n`;
+
+    const response = await request(app)
+      .post('/api/datasets/import-csv?name=Oversized')
+      .set('Content-Type', 'text/csv')
+      .send(oversizedCsv);
+
+    expect(response.status).toBe(413);
+    expect(response.body.message).toBe('CSV exceeds the maximum upload size.');
+  });
+
+  it('persists a small CSV import and returns it from the dataset API', async () => {
+    const response = await request(app)
+      .post('/api/datasets/import-csv?name=Small%20CSV')
+      .set('Content-Type', 'text/csv')
+      .send('name,score\nAda,10\nGrace,9\n');
+
+    expect(response.status).toBe(201);
+    const persisted = await request(app).get(`/api/datasets/${response.body.id}`);
+    expect(persisted.status).toBe(200);
+    expect(persisted.body.name).toBe('Small CSV');
+    expect(persisted.body.records).toEqual([
+      { name: 'Ada', score: 10 },
+      { name: 'Grace', score: 9 }
+    ]);
   });
 
   it('returns an explainable quality report for imported data', async () => {

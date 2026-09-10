@@ -131,6 +131,9 @@ export const importCsvDataset = async (payload: {
   });
 
   if (!response.ok) {
+    if (response.status === 413) {
+      throw new Error('CSV exceeds the maximum upload size.');
+    }
     const error = await response.json().catch(() => ({ message: 'CSV file could not be imported.' }));
     throw new Error(error.message ?? 'CSV file could not be imported.');
   }
