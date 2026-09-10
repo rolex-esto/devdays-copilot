@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
-import { createDataset, deleteDataset, fetchDatasets, fetchQuality, importCsvDataset, updateDataset, updateDatasetRecord } from './api';
+import { createDataset, deleteDataset, fetchDatasets, fetchQuality, importCsvDataset, runQuality, updateDataset, updateDatasetRecord } from './api';
 import type { Dataset, DatasetRecord, DatasetSourceType, QualityIssue, QualityReport } from './types';
 
 const emptyForm = {
@@ -102,26 +102,27 @@ function QualityOverview({
     <section className="quality-report">
       <div className="quality-heading">
         <div>
-          <p className="section-kicker">Analysis complete</p>
+          <p className="section-kicker">{report.analysis_status === 'COMPLETED' ? 'Analysis complete' : 'Quality check status'}</p>
           <h2>Data Quality Overview</h2>
           <p className="helper-text">A clear snapshot of the health of {dataset.name}. No data was changed.</p>
         </div>
-        <button type="button" className="quiet-button refresh-button" onClick={onRefresh}>Run check again</button>
+        <button type="button" className="quiet-button refresh-button" onClick={onRefresh}>{report.analysis_status === 'NOT_ANALYZED' ? 'Run quality check' : 'Run check again'}</button>
       </div>
       <div className="quality-hero panel">
-        <div className={`score-circle score-${report.label.toLowerCase().replaceAll(' ', '-')}`}>
-          <strong>{report.score}</strong><span>/100</span>
+        <div className={`score-circle ${report.score !== null ? `score-${report.label.toLowerCase().replaceAll(' ', '-')}` : 'score-unavailable'}`}>
+          <strong>{report.score ?? '—'}</strong>{report.score !== null ? <span>/100</span> : null}
         </div>
         <div className="score-copy">
           <p className="section-kicker">Data quality score</p>
-          <h3>{report.label}</h3>
-          <p>{report.total_issues === 0 ? 'No major issues detected by the configured checks.' : `${report.total_issues} issue types affect ${report.affected_rows} records.`}</p>
+          <h3>{report.analysis_status === 'NOT_ANALYZED' ? 'Not analyzed yet' : report.analysis_status === 'STALE' ? 'Stale analysis' : report.analysis_status === 'FAILED' ? 'Analysis failed' : report.analysis_status === 'ANALYZING' ? 'Analyzing dataset...' : report.label}</h3>
+          <p>{report.analysis_status === 'NOT_ANALYZED' ? 'Run a quality check to generate a score.' : report.analysis_status === 'STALE' ? 'This dataset changed after the last quality check. Run the check again to refresh the score.' : report.analysis_status === 'FAILED' ? 'We could not calculate a quality score for this dataset.' : report.analysis_status === 'ANALYZING' ? 'We are checking this dataset now.' : report.total_issues === 0 ? 'No major issues detected by the configured checks.' : `${report.total_issues} issue types affect ${report.affected_rows} records.`}</p>
+          {report.last_analyzed_at && report.analysis_status !== 'NOT_ANALYZED' ? <small>Last analyzed: {new Date(report.last_analyzed_at).toLocaleString()}</small> : null}
         </div>
-        <div className="dimension-list">
+        {report.analysis_status !== 'NOT_ANALYZED' && report.analysis_status !== 'FAILED' && report.analysis_status !== 'ANALYZING' ? <div className="dimension-list">
           {Object.entries(report.dimensions).map(([name, value]) => (
             <div key={name}><span>{name}</span><strong>{value}%</strong><i><em style={{ width: `${value}%` }} /></i></div>
           ))}
-        </div>
+        </div> : null}
       </div>
       <div className="quality-metrics">
         <Metric label="Rows" value={report.summary.rows} />
@@ -132,8 +133,8 @@ function QualityOverview({
         <Metric label="Potential outliers" value={report.summary.potential_outliers} />
       </div>
       <div className="quality-section panel">
-        <div className="section-title-row"><div><p className="section-kicker">Findings</p><h3>Issues detected</h3></div><span className="muted">{report.issues.length} issue types</span></div>
-        <div className={`recommendation recommendation-${recommendation.priority}`}>
+        <div className="section-title-row"><div><p className="section-kicker">Findings</p><h3>Issues detected</h3></div><span className="muted">{report.analysis_status === 'COMPLETED' || report.analysis_status === 'STALE' ? `${report.issues.length} issue types` : 'Available after analysis'}</span></div>
+        {(report.analysis_status === 'COMPLETED' || report.analysis_status === 'STALE') ? <div className={`recommendation recommendation-${recommendation.priority}`}>
           <div>
             <p className="recommendation-label">Recommended action</p>
             <h4>{recommendation.title}</h4>
@@ -141,8 +142,8 @@ function QualityOverview({
             {report.affected_rows > 0 ? <small>{report.affected_rows.toLocaleString()} unique records affected across all findings.</small> : null}
           </div>
           {recommendation.actionLabel ? <button type="button" className="primary-button recommendation-action" onClick={() => setSeverityFilter(recommendation.priority)}>{recommendation.actionLabel} →</button> : null}
-        </div>
-        {report.issues.length === 0 ? <p className="empty-report">Everything looks healthy based on the checks we can run.</p> : (
+        </div> : null}
+        {report.analysis_status !== 'COMPLETED' && report.analysis_status !== 'STALE' ? <p className="empty-report">{report.analysis_status === 'NOT_ANALYZED' ? 'Run a quality check to see findings and column health.' : 'Findings are unavailable until the quality check finishes.'}</p> : report.issues.length === 0 ? <p className="empty-report">Everything looks healthy based on the checks we can run.</p> : (
           <>
             <div className="filter-label">Filter issues</div>
             <div className="severity-row">
@@ -621,7 +622,7 @@ function App() {
                 report={quality}
                 selectedIssue={selectedIssue}
                 onIssueSelect={setSelectedIssue}
-                onRefresh={() => void loadQuality(selectedDataset.id)}
+                onRefresh={() => void (async () => { setQualityLoading(true); try { setQuality(await runQuality(selectedDataset.id)); } catch (runError) { setError(runError instanceof Error ? runError.message : 'We could not analyze this dataset.'); } finally { setQualityLoading(false); } })()}
                 onOpenExplorer={(issue) => { setSelectedIssue(issue); setActiveView('explorer'); }}
               />
             ) : null}

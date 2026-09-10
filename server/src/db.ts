@@ -25,10 +25,28 @@ db.exec(`
     column_count INTEGER NOT NULL DEFAULT 0,
     records TEXT NOT NULL DEFAULT '[]',
     created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL
+    updated_at TEXT NOT NULL,
+    analysis_status TEXT NOT NULL DEFAULT 'NOT_ANALYZED',
+    last_analyzed_at TEXT,
+    quality_score INTEGER,
+    analysis_run_id TEXT,
+    quality_report TEXT
   );
 
   CREATE INDEX IF NOT EXISTS idx_datasets_updated_at ON datasets(updated_at DESC);
 `);
+
+const columns = db.prepare('PRAGMA table_info(datasets)').all() as Array<{ name: string }>;
+const existingColumns = new Set(columns.map((column) => column.name));
+const migrations = [
+  ['analysis_status', "ALTER TABLE datasets ADD COLUMN analysis_status TEXT NOT NULL DEFAULT 'NOT_ANALYZED'"],
+  ['last_analyzed_at', 'ALTER TABLE datasets ADD COLUMN last_analyzed_at TEXT'],
+  ['quality_score', 'ALTER TABLE datasets ADD COLUMN quality_score INTEGER'],
+  ['analysis_run_id', 'ALTER TABLE datasets ADD COLUMN analysis_run_id TEXT'],
+  ['quality_report', 'ALTER TABLE datasets ADD COLUMN quality_report TEXT']
+] as const;
+migrations.forEach(([name, statement]) => {
+  if (!existingColumns.has(name)) db.exec(statement);
+});
 
 export default db;

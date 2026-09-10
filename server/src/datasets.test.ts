@@ -85,7 +85,10 @@ describe('dataset API', () => {
       .set('Content-Type', 'text/csv')
       .send('Transaction ID,Quantity,Price Per Unit,Payment Method\n1,2,5.00,Cash\n1,,ERROR,UNKNOWN\n3,-2,100.00,Card\n');
 
-    const report = await request(app).get(`/api/datasets/${created.body.id}/quality`);
+    const beforeAnalysis = await request(app).get(`/api/datasets/${created.body.id}/quality`);
+    expect(beforeAnalysis.body.analysis_status).toBe('NOT_ANALYZED');
+
+    const report = await request(app).post(`/api/datasets/${created.body.id}/quality`);
 
     expect(report.status).toBe(200);
     expect(report.body.summary.rows).toBe(3);
@@ -96,6 +99,25 @@ describe('dataset API', () => {
     expect(report.body.columns).toEqual(expect.arrayContaining([
       expect.objectContaining({ name: 'Quantity', inferred_type: 'number' })
     ]));
+  });
+
+  it('keeps the completed score and marks it stale after a record changes', async () => {
+    const created = await request(app)
+      .post('/api/datasets')
+      .send({ name: 'Scored data', records: [{ id: 1, amount: 10 }, { id: 2, amount: 20 }] });
+
+    const analyzed = await request(app).post(`/api/datasets/${created.body.id}/quality`);
+    expect(analyzed.body.analysis_status).toBe('COMPLETED');
+    expect(analyzed.body.score).toBe(100);
+
+    const updated = await request(app)
+      .put(`/api/datasets/${created.body.id}/records/0`)
+      .send({ id: 1, amount: 'not-a-number' });
+    expect(updated.body.analysis_status).toBe('STALE');
+
+    const stale = await request(app).get(`/api/datasets/${created.body.id}/quality`);
+    expect(stale.body.analysis_status).toBe('STALE');
+    expect(stale.body.score).toBe(100);
   });
 
   it('updates one stored record without replacing the dataset', async () => {

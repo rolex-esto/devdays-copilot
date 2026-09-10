@@ -32,6 +32,9 @@ export interface ColumnProfile {
 }
 
 export interface QualityReport {
+  analysis_status: 'COMPLETED';
+  last_analyzed_at: string;
+  analysis_run_id: string | null;
   analyzed_at: string;
   score: number;
   label: 'Excellent' | 'Good' | 'Needs Attention' | 'Poor' | 'Critical';
@@ -224,6 +227,9 @@ export const analyzeDataset = (records: DatasetRecord[]): QualityReport => {
   const consistency = Math.max(0, Math.round(100 - (potentialOutliers / Math.max(rows.length, 1)) * 100));
 
   return {
+    analysis_status: 'COMPLETED',
+    last_analyzed_at: new Date().toISOString(),
+    analysis_run_id: null,
     analyzed_at: new Date().toISOString(),
     score,
     label: qualityLabel(score),

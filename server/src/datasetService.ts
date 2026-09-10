@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import db from './db.js';
-import type { Dataset, DatasetInput, DatasetRecord } from './types.js';
+import type { AnalysisStatus, Dataset, DatasetInput, DatasetRecord } from './types.js';
 
 const datasetSchema = z.object({
   name: z.string().trim().min(1).max(120),
@@ -51,7 +51,12 @@ const mapRow = (row: any): Dataset => ({
   column_count: Number(row.column_count),
   created_at: row.created_at,
   updated_at: row.updated_at,
-  records: JSON.parse(row.records ?? '[]')
+  records: JSON.parse(row.records ?? '[]'),
+  analysis_status: (row.analysis_status ?? 'NOT_ANALYZED') as AnalysisStatus,
+  last_analyzed_at: row.last_analyzed_at ?? null,
+  quality_score: row.quality_score === null || row.quality_score === undefined ? null : Number(row.quality_score),
+  analysis_run_id: row.analysis_run_id ?? null,
+  quality_report: row.quality_report ?? null
 });
 
 export const listDatasets = () => {
@@ -79,12 +84,17 @@ export const createDataset = (input: DatasetInput) => {
     column_count: meta.column_count,
     created_at: now,
     updated_at: now,
-    records: parsedRecords
+    records: parsedRecords,
+    analysis_status: 'NOT_ANALYZED',
+    last_analyzed_at: null,
+    quality_score: null,
+    analysis_run_id: null,
+    quality_report: null
   };
 
   db.prepare(
-    `INSERT INTO datasets (id, name, description, source_type, file_name, row_count, column_count, records, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    `INSERT INTO datasets (id, name, description, source_type, file_name, row_count, column_count, records, created_at, updated_at, analysis_status)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   ).run(
     dataset.id,
     dataset.name,
@@ -95,7 +105,8 @@ export const createDataset = (input: DatasetInput) => {
     dataset.column_count,
     JSON.stringify(dataset.records),
     dataset.created_at,
-    dataset.updated_at
+    dataset.updated_at,
+    dataset.analysis_status
   );
 
   return dataset;
@@ -117,17 +128,19 @@ export const updateDataset = (id: string, input: DatasetUpdateInput) => {
   };
 
   const meta = buildDatasetMeta(merged.records);
+  const recordsChanged = payload.records !== undefined;
   const updated: Dataset = {
     ...existing,
     ...merged,
     row_count: meta.row_count,
     column_count: meta.column_count,
-    updated_at: new Date().toISOString()
+    updated_at: new Date().toISOString(),
+    analysis_status: recordsChanged ? 'STALE' : existing.analysis_status
   };
 
   db.prepare(
     `UPDATE datasets
-     SET name = ?, description = ?, source_type = ?, file_name = ?, row_count = ?, column_count = ?, records = ?, updated_at = ?
+     SET name = ?, description = ?, source_type = ?, file_name = ?, row_count = ?, column_count = ?, records = ?, updated_at = ?, analysis_status = ?
      WHERE id = ?`
   ).run(
     updated.name,
@@ -138,10 +151,20 @@ export const updateDataset = (id: string, input: DatasetUpdateInput) => {
     updated.column_count,
     JSON.stringify(updated.records),
     updated.updated_at,
+    updated.analysis_status,
     id
   );
 
   return updated;
+};
+
+export const saveQualityReport = (id: string, report: string, score: number, analyzedAt: string, analysisRunId: string) => {
+  const result = db.prepare(
+    `UPDATE datasets
+     SET analysis_status = 'COMPLETED', last_analyzed_at = ?, quality_score = ?, analysis_run_id = ?, quality_report = ?
+     WHERE id = ?`
+  ).run(analyzedAt, score, analysisRunId, report, id);
+  return result.changes > 0 ? getDatasetById(id) : null;
 };
 
 export const deleteDataset = (id: string) => {

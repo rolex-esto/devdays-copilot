@@ -1,6 +1,7 @@
 import express, { Router } from 'express';
+import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
-import { createDataset, deleteDataset, getDatasetById, listDatasets, updateDataset, updateDatasetRecord } from '../datasetService.js';
+import { createDataset, deleteDataset, getDatasetById, listDatasets, saveQualityReport, updateDataset, updateDatasetRecord } from '../datasetService.js';
 import { parseCsv } from '../csv.js';
 import { analyzeDataset } from '../quality.js';
 
@@ -60,12 +61,41 @@ router.post('/import-csv', express.text({ type: ['text/csv', 'text/plain'], limi
   }
 });
 
+const emptyQualityReport = (status: string) => ({
+  analysis_status: status,
+  last_analyzed_at: null,
+  analysis_run_id: null,
+  analyzed_at: '',
+  score: null,
+  label: status === 'STALE' ? 'Stale analysis' : status === 'FAILED' ? 'Analysis failed' : status === 'ANALYZING' ? 'Analyzing dataset...' : 'Not analyzed yet',
+  total_issues: 0,
+  affected_rows: 0,
+  summary: { rows: 0, columns: 0, missing_values: 0, duplicate_rows: 0, invalid_values: 0, potential_outliers: 0 },
+  dimensions: { completeness: 0, uniqueness: 0, validity: 0, consistency: 0 },
+  issues: [],
+  columns: []
+});
+
 router.get('/:id/quality', (req, res) => {
   const dataset = getDatasetById(req.params.id);
   if (!dataset) {
     return res.status(404).json({ message: 'Dataset not found' });
   }
-  return res.json(analyzeDataset(dataset.records));
+  if (!dataset.quality_report) return res.json(emptyQualityReport(dataset.analysis_status));
+  return res.json({ ...JSON.parse(dataset.quality_report), analysis_status: dataset.analysis_status, last_analyzed_at: dataset.last_analyzed_at, analysis_run_id: dataset.analysis_run_id });
+});
+
+router.post('/:id/quality', (req, res) => {
+  const dataset = getDatasetById(req.params.id);
+  if (!dataset) return res.status(404).json({ message: 'Dataset not found' });
+  const analysisRunId = randomUUID();
+  try {
+    const report = analyzeDataset(dataset.records);
+    const saved = saveQualityReport(dataset.id, JSON.stringify(report), report.score, report.analyzed_at, analysisRunId);
+    return res.json({ ...report, analysis_status: 'COMPLETED', last_analyzed_at: report.analyzed_at, analysis_run_id: saved?.analysis_run_id ?? analysisRunId });
+  } catch (error) {
+    return res.status(500).json({ ...emptyQualityReport('FAILED'), message: error instanceof Error ? error.message : 'We could not analyze this dataset.' });
+  }
 });
 
 router.put('/:id/records/:recordIndex', (req, res) => {

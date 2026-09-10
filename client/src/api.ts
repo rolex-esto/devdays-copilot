@@ -25,6 +25,12 @@ export const fetchQuality = async (id: string): Promise<QualityReport> => {
   return response.json();
 };
 
+export const runQuality = async (id: string): Promise<QualityReport> => {
+  const response = await fetch(`${BASE}/datasets/${id}/quality`, { method: 'POST' });
+  if (!response.ok) throw new Error('We could not analyze this dataset.');
+  return response.json();
+};
+
 export const updateDatasetRecord = async (datasetId: string, recordIndex: number, record: DatasetRecord): Promise<Dataset> => {
   const response = await fetch(`${BASE}/datasets/${datasetId}/records/${recordIndex}`, {
     method: 'PUT',
