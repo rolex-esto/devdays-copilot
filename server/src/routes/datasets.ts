@@ -1,6 +1,7 @@
-import { Router } from 'express';
+import express, { Router } from 'express';
 import { z } from 'zod';
 import { createDataset, deleteDataset, getDatasetById, listDatasets, updateDataset } from '../datasetService.js';
+import { parseCsv } from '../csv.js';
 
 const router = Router();
 
@@ -29,6 +30,33 @@ router.post('/', (req, res) => {
 
   const dataset = createDataset(parsed.data);
   return res.status(201).json(dataset);
+});
+
+router.post('/import-csv', express.text({ type: ['text/csv', 'text/plain'], limit: '5mb' }), (req, res) => {
+  if (typeof req.body !== 'string' || req.body.trim() === '') {
+    return res.status(400).json({ message: 'Choose a CSV file with at least a header row.' });
+  }
+
+  const name = typeof req.query.name === 'string' ? req.query.name.trim() : '';
+  if (!name) {
+    return res.status(400).json({ message: 'A dataset name is required.' });
+  }
+
+  try {
+    const parsed = parseCsv(req.body);
+    const dataset = createDataset({
+      name,
+      description: typeof req.query.description === 'string' ? req.query.description : '',
+      source_type: 'CSV',
+      file_name: typeof req.query.file_name === 'string' ? req.query.file_name : null,
+      records: parsed.records
+    });
+    return res.status(201).json(dataset);
+  } catch (error) {
+    return res.status(400).json({
+      message: error instanceof Error ? error.message : 'The CSV file could not be read.'
+    });
+  }
 });
 
 router.get('/:id', (req, res) => {

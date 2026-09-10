@@ -81,6 +81,7 @@ input, select, textarea {
   width: 100%; border: 1px solid #cbd9e8; border-radius: 11px; outline: none;
   color: #193a58; background: #fff; padding: 12px 13px; transition: 0.2s ease;
 }
+input[type='file'] { padding: 9px; background: #f8fbfe; }
 input::placeholder, textarea::placeholder { color: #9aabbb; }
 input:focus, select:focus, textarea:focus { border-color: #4d9ce3; box-shadow: 0 0 0 3px rgba(77, 156, 227, 0.14); }
 textarea { resize: vertical; }

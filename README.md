@@ -85,6 +85,7 @@ The `verify` command runs linting, TypeScript checks, tests, and production buil
 - GET /api/health
 - GET /api/datasets
 - POST /api/datasets
+- POST /api/datasets/import-csv
 - GET /api/datasets/:id
 - PUT /api/datasets/:id
 - DELETE /api/datasets/:id

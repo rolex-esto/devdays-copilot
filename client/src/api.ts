@@ -36,6 +36,30 @@ export const createDataset = async (payload: {
   return response.json();
 };
 
+export const importCsvDataset = async (payload: {
+  name: string;
+  description?: string;
+  file: File;
+}): Promise<Dataset> => {
+  const params = new URLSearchParams({
+    name: payload.name,
+    description: payload.description ?? '',
+    file_name: payload.file.name
+  });
+  const response = await fetch(`${BASE}/datasets/import-csv?${params.toString()}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/csv' },
+    body: await payload.file.text()
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ message: 'CSV file could not be imported.' }));
+    throw new Error(error.message ?? 'CSV file could not be imported.');
+  }
+
+  return response.json();
+};
+
 export const updateDataset = async (
   id: string,
   payload: Partial<{

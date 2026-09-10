@@ -50,4 +50,32 @@ describe('dataset API', () => {
     const fetched = await request(app).get(`/api/datasets/${created.body.id}`);
     expect(fetched.status).toBe(404);
   });
+
+  it('imports a CSV and profiles its rows and columns', async () => {
+    const response = await request(app)
+      .post('/api/datasets/import-csv?name=Customer%20orders&file_name=orders.csv')
+      .set('Content-Type', 'text/csv')
+      .send('order_id,customer,amount\nA-1,"Ada, Lovelace",1250\nA-2,Grace,980\n');
+
+    expect(response.status).toBe(201);
+    expect(response.body.source_type).toBe('CSV');
+    expect(response.body.file_name).toBe('orders.csv');
+    expect(response.body.row_count).toBe(2);
+    expect(response.body.column_count).toBe(3);
+    expect(response.body.records[0]).toEqual({
+      order_id: 'A-1',
+      customer: 'Ada, Lovelace',
+      amount: 1250
+    });
+  });
+
+  it('rejects malformed CSV rows instead of silently dropping them', async () => {
+    const response = await request(app)
+      .post('/api/datasets/import-csv?name=Broken%20orders')
+      .set('Content-Type', 'text/csv')
+      .send('order_id,amount\nA-1,1250,unexpected\n');
+
+    expect(response.status).toBe(400);
+    expect(response.body.message).toContain('expected 2');
+  });
 });

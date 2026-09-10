@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
-import { createDataset, deleteDataset, fetchDatasets, updateDataset } from './api';
+import { createDataset, deleteDataset, fetchDatasets, importCsvDataset, updateDataset } from './api';
 import type { Dataset, DatasetRecord, DatasetSourceType } from './types';
 
 const emptyForm = {
@@ -23,6 +23,7 @@ function App() {
   const [status, setStatus] = useState('');
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [csvFile, setCsvFile] = useState<File | null>(null);
 
   const selectedDataset = useMemo(
     () => datasets.find((dataset) => dataset.id === selectedId) ?? null,
@@ -60,6 +61,7 @@ function App() {
     setSelectedId(null);
     setIsCreating(true);
     setForm(emptyForm);
+    setCsvFile(null);
     setStatus('');
     setError('');
   };
@@ -90,6 +92,30 @@ function App() {
 
   const handleCreate = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    setError('');
+    setStatus('');
+    if (form.source_type === 'CSV' && !csvFile) {
+      setError('Choose a CSV file before creating the dataset.');
+      return;
+    }
+    if (form.source_type === 'CSV' && csvFile && !csvFile.name.toLowerCase().endsWith('.csv')) {
+      setError('Please choose a file ending in .csv.');
+      return;
+    }
+    if (form.source_type === 'CSV' && csvFile) {
+      setIsSubmitting(true);
+      await importCsvDataset({ name: form.name, description: form.description, file: csvFile })
+        .then((dataset) => {
+          setDatasets((current) => [dataset, ...current]);
+          setSelectedId(dataset.id);
+          setIsCreating(false);
+          setCsvFile(null);
+          setStatus(`"${dataset.name}" is ready to explore.`);
+        })
+        .catch((submitError) => setError(submitError instanceof Error ? submitError.message : 'We could not import that CSV.'))
+        .finally(() => setIsSubmitting(false));
+      return;
+    }
     await create({
       name: form.name,
       description: form.description,
@@ -259,11 +285,15 @@ function App() {
                 <label>
                   File name <span className="optional">(optional for now)</span>
                   <input
-                    value={form.file_name}
-                    onChange={(event) => setForm((current) => ({ ...current, file_name: event.target.value }))}
-                    placeholder="orders.csv"
+                    type="file"
+                    accept=".csv,text/csv"
+                    onChange={(event) => {
+                      const file = event.target.files?.[0] ?? null;
+                      setCsvFile(file);
+                      setForm((current) => ({ ...current, file_name: file?.name ?? '' }));
+                    }}
                   />
-                  <span className="field-note">CSV upload is coming next. You can save the dataset details now.</span>
+                  <span className="field-note">{csvFile ? `Selected: ${csvFile.name}` : 'Choose a CSV file up to 5 MB.'}</span>
                 </label>
               ) : null}
 
