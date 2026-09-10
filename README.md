@@ -61,7 +61,7 @@ The frontend runs on http://localhost:5173 and the API runs on http://localhost:
 
 ### Vercel deployment
 
-The repository includes a Vercel configuration that builds the Vite client from the workspace root and exposes the existing Express API through `/api/*`. Set the Vercel project **Root Directory** to the repository root, leave the install command empty so workspace dependencies are installed from the root `package.json`, and deploy with:
+The repository includes a Vercel configuration that builds the Vite client from the workspace root and exposes the existing Express API through `/api/*` using a catch-all serverless function. Set the Vercel project **Root Directory** to the repository root, leave the install command empty so workspace dependencies are installed from the root `package.json`, and deploy with:
 
 ```bash
 vercel --prod
