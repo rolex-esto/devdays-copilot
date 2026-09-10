@@ -1,6 +1,8 @@
 # DataPulse
 
-DataPulse is a lightweight data quality and analytics platform built to demonstrate agentic software delivery with GitHub Copilot. The app lets users create datasets, inspect records, update metadata, and cleanly manage the core dataset lifecycle.
+DataPulse is a lightweight data quality and analytics platform built to demonstrate agentic software delivery with GitHub Copilot. The app lets users upload CSV files, inspect records, measure data quality, run safe analytics, and manage the core dataset lifecycle.
+
+Live demo: https://devdays-datapulse.vercel.app
 
 ## Architecture
 
@@ -15,7 +17,7 @@ This is intentionally lightweight so the engineering workflow remains easy to re
 
 ## Implementation plan
 
-### Phase 1 — vertical slice (current)
+### Phase 1 — vertical slice
 
 - Create dataset
 - Store dataset metadata
@@ -30,7 +32,7 @@ This is intentionally lightweight so the engineering workflow remains easy to re
 - schema profiling
 - quality rules and scoring
 
-### Phase 2B — bounded agentic analytics (current)
+### Phase 2B — bounded agentic analytics
 
 - A read-only SQL Agent executes only one validated `SELECT`/`WITH` statement against a grounded `dataset` table. Queries are capped at 2,000 characters, 500 rows, and a one-second execution budget; DDL, DML, comments, system tables, and cross joins are rejected.
 - Analytical requests follow the deterministic Data Analyst → SQL → Verifier path. Visualization specs are created only from verified SQL rows and include the executed SQL in the run details.
@@ -50,6 +52,16 @@ This is intentionally lightweight so the engineering workflow remains easy to re
 - documentation
 - test coverage and regression checks
 
+## CSV uploads
+
+Choose **A CSV file** in the Add a dataset form. The browser sends the file contents as `text/csv` to `POST /api/datasets/import-csv`; the server parses quoted values, validates headers and row widths, coerces numbers and booleans, and stores the resulting records in SQLite.
+
+CSV and API request bodies are limited to 4 MB to stay within serverless request constraints. The API returns safe, actionable errors without exposing stack traces:
+
+- `413` — `CSV exceeds the maximum upload size.`
+- `400` — `CSV could not be parsed.`
+- `500` — `Dataset could not be stored.`
+
 ## Local setup
 
 ```bash
@@ -61,13 +73,19 @@ The frontend runs on http://localhost:5173 and the API runs on http://localhost:
 
 ### Vercel deployment
 
-The repository includes a Vercel configuration that builds the Vite client from the workspace root and exposes the existing Express API through `/api/*` using a catch-all serverless function. Set the Vercel project **Root Directory** to the repository root, leave the install command empty so workspace dependencies are installed from the root `package.json`, and deploy with:
+The repository includes a Vercel configuration that builds the Vite client from the workspace root and exposes the existing Express API through `/api/*` using a catch-all serverless function. The deployment is pinned to Node.js 22 for compatibility with the native `better-sqlite3` dependency. Set the Vercel project **Root Directory** to the repository root, leave the install command empty so workspace dependencies are installed from the root `package.json`, and deploy with:
 
 ```bash
 vercel --prod
 ```
 
-The local SQLite database is suitable for development and demos. Vercel serverless storage is ephemeral, so production deployments should move dataset and mutation persistence to a managed database before relying on data surviving function restarts.
+After deployment, verify the API before testing an upload:
+
+```bash
+curl https://devdays-datapulse.vercel.app/api/health
+```
+
+The local SQLite database is suitable for development and demos. Vercel serverless storage uses writable temporary storage that is ephemeral, so production deployments should move dataset and mutation persistence to a managed database before relying on data surviving function restarts.
 
 ## Production build
 
@@ -81,6 +99,14 @@ npm run start
 ```bash
 npm test
 ```
+
+Run the complete local verification gate with:
+
+```bash
+npm run verify
+```
+
+This runs linting, TypeScript checks, the server regression suite, and production builds.
 
 ## Engineering loop
 
