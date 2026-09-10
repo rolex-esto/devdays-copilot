@@ -65,6 +65,21 @@ npm run start
 npm test
 ```
 
+## Engineering loop
+
+DataPulse is developed with a repeatable engineering loop:
+
+1. **Observe** — reproduce the issue or review the user journey.
+2. **Collect evidence** — inspect the browser, API response, logs, and failing test.
+3. **Form a hypothesis** — identify the smallest likely root cause.
+4. **Implement** — make a focused change and add a regression test when behavior changes.
+5. **Run** — execute the narrowest relevant check first.
+6. **Debug** — if a check fails, use the new evidence to refine the hypothesis instead of rewriting blindly.
+7. **Verify** — run the full project gate with `npm run verify`.
+8. **Improve** — document the fix and note the next highest-value improvement.
+
+The `verify` command runs linting, TypeScript checks, tests, and production builds in sequence.
+
 ## API summary
 
 - GET /api/health
