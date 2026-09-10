@@ -3,3 +3,7 @@ client/dist/
 server/dist/
 server/data/
 .DS_Store
+
+*.tsbuildinfo
+client/vite.config.js
+client/vite.config.d.ts
