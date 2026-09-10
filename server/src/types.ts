@@ -19,6 +19,8 @@ export interface Dataset {
   quality_score: number | null;
   analysis_run_id: string | null;
   quality_report: string | null;
+  revision: number;
+  content_version: string;
 }
 
 export interface DatasetInput {

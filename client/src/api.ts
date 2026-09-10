@@ -1,4 +1,4 @@
-import type { AgentRun, AgentRunSummary, Dataset, DatasetRecord, DatasetSourceType } from './types';
+import type { AgentRun, AgentRunSummary, Dataset, DatasetRecord, DatasetSourceType, MutationProposal } from './types';
 import type { QualityReport } from './types';
 
 const BASE = '/api';
@@ -42,6 +42,30 @@ export const runAgent = async (prompt: string, datasetId: string): Promise<Agent
     throw new Error(error.message ?? 'DataPulse could not process that request.');
   }
   return response.json();
+};
+
+export const runReadOnlySql = async (datasetId: string, sql: string): Promise<Record<string, unknown>> => {
+  const response = await fetch(`${BASE}/agents/sql`, { method: 'POST', headers: buildHeaders(), body: JSON.stringify({ datasetId, sql }) });
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(body.message ?? 'SQL query failed.');
+  return body;
+};
+
+export const fetchMutationProposals = async (datasetId: string): Promise<MutationProposal[]> => {
+  const response = await fetch(`${BASE}/mutations/proposals?datasetId=${encodeURIComponent(datasetId)}`);
+  if (!response.ok) throw new Error('We could not load mutation proposals.');
+  return response.json();
+};
+
+export const approveMutationProposal = async (proposal: MutationProposal): Promise<MutationProposal> => {
+  const response = await fetch(`${BASE}/mutations/proposals/${encodeURIComponent(proposal.id)}/approve`, {
+    method: 'POST',
+    headers: { ...buildHeaders(), ...(proposal.approval_token ? { 'x-approval-token': proposal.approval_token } : {}) },
+    body: JSON.stringify({ expectedRevision: proposal.dataset_revision, contentVersion: proposal.content_version })
+  });
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(body.message ?? 'The mutation proposal could not be approved.');
+  return body;
 };
 
 export const fetchAgentRuns = async (datasetId: string): Promise<AgentRunSummary[]> => {

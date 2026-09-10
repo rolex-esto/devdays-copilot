@@ -30,6 +30,13 @@ This is intentionally lightweight so the engineering workflow remains easy to re
 - schema profiling
 - quality rules and scoring
 
+### Phase 2B — bounded agentic analytics (current)
+
+- A read-only SQL Agent executes only one validated `SELECT`/`WITH` statement against a grounded `dataset` table. Queries are capped at 2,000 characters, 500 rows, and a one-second execution budget; DDL, DML, comments, system tables, and cross joins are rejected.
+- Analytical requests follow the deterministic Data Analyst → SQL → Verifier path. Visualization specs are created only from verified SQL rows and include the executed SQL in the run details.
+- Data-changing requests create preview-only, expiring mutation proposals. Approval checks the dataset revision and content hash, executes idempotently inside a transaction, records before-values in an audit log, and supports safe rollback when the dataset has not changed.
+- Orchestration is bounded and treats prompts and dataset values as untrusted content. No external LLM or arbitrary model-generated SQL is executed.
+
 ### Phase 3 — analytics and visualization
 
 - summaries and charts
@@ -92,6 +99,11 @@ The `verify` command runs linting, TypeScript checks, tests, and production buil
 - PUT /api/datasets/:id
 - DELETE /api/datasets/:id
 - POST /api/agents/run
+- POST /api/agents/sql
+- GET/POST /api/mutations/proposals
+- POST /api/mutations/proposals/:id/approve
+- POST /api/mutations/proposals/:id/rollback
+- GET /api/mutations/audit
 
 ## Automatic quality report
 

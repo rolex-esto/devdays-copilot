@@ -7,8 +7,8 @@ export const persistOrchestrationRun = (run: OrchestrationRun & { results: Agent
     (id, dataset_id, user_prompt, classified_intent, status, iteration_count, started_at, completed_at, created_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`);
   const insertStep = db.prepare(`INSERT INTO agent_steps
-    (id, run_id, agent_id, iteration, status, summary, started_at, completed_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)`);
+    (id, run_id, agent_id, iteration, status, summary, payload, started_at, completed_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`);
   const insertVerification = db.prepare(`INSERT OR REPLACE INTO agent_verifications
     (run_id, passed, score, criteria_passed, criteria_failed, recommendation)
     VALUES (?, ?, ?, ?, ?, ?)`);
@@ -21,6 +21,7 @@ export const persistOrchestrationRun = (run: OrchestrationRun & { results: Agent
       run.iteration,
       entry.status,
       entry.message,
+      null,
       entry.timestamp,
       entry.timestamp
     ));
@@ -31,6 +32,7 @@ export const persistOrchestrationRun = (run: OrchestrationRun & { results: Agent
       run.iteration,
       result.status,
       result.summary,
+      JSON.stringify(result),
       run.startedAt,
       run.completedAt
     ));
@@ -50,7 +52,10 @@ export const listOrchestrationRuns = (datasetId: string) => db.prepare(
 export const getOrchestrationRun = (runId: string) => {
   const run = db.prepare('SELECT * FROM agent_runs WHERE id = ?').get(runId) as Record<string, unknown> | undefined;
   if (!run) return null;
-  const steps = db.prepare('SELECT agent_id, iteration, status, summary, started_at, completed_at FROM agent_steps WHERE run_id = ? ORDER BY started_at').all(runId);
+  const steps = db.prepare('SELECT agent_id, iteration, status, summary, payload, started_at, completed_at FROM agent_steps WHERE run_id = ? ORDER BY started_at').all(runId) as Array<Record<string, unknown>>;
   const verification = db.prepare('SELECT * FROM agent_verifications WHERE run_id = ?').get(runId) ?? null;
-  return { ...run, steps, verification };
+  const results = steps
+    .filter((step) => typeof step.payload === 'string' && step.payload.length > 0)
+    .map((step) => JSON.parse(String(step.payload)));
+  return { ...run, steps, results, verification };
 };

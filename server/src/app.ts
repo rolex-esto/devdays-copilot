@@ -3,6 +3,7 @@ import express from 'express';
 import morgan from 'morgan';
 import datasetRouter from './routes/datasets.js';
 import agentRouter from './routes/agents.js';
+import mutationRouter from './routes/mutations.js';
 
 export const app = express();
 
@@ -16,6 +17,7 @@ app.get('/api/health', (_req, res) => {
 
 app.use('/api/datasets', datasetRouter);
 app.use('/api/agents', agentRouter);
+app.use('/api/mutations', mutationRouter);
 
 app.use((req, res) => {
   res.status(404).json({ message: `Route not found: ${req.originalUrl}` });

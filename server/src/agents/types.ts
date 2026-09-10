@@ -33,7 +33,7 @@ export interface AgentTask {
 }
 
 export interface Evidence {
-  kind: 'dataset' | 'quality' | 'routing' | 'verification' | 'permission';
+  kind: 'dataset' | 'quality' | 'routing' | 'verification' | 'permission' | 'sql' | 'sql_result' | 'chart' | 'proposal';
   summary: string;
   value?: unknown;
 }
@@ -43,6 +43,14 @@ export interface AgentContext {
   dataset: Dataset | null;
   qualityReport: QualityReport | null;
   iteration: number;
+}
+
+export interface ChartSpec {
+  type: 'bar' | 'line' | 'table';
+  title: string;
+  xKey: string;
+  yKey: string;
+  data: Array<Record<string, unknown>>;
 }
 
 export interface AgentResult {

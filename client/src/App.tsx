@@ -308,7 +308,11 @@ function AskDataPulse({ dataset, onError }: { dataset: Dataset; onError: (messag
       {run ? <div className="agent-result" aria-live="polite">
         <div className="agent-result-header"><strong>{run.status.replaceAll('_', ' ')}</strong><span>{run.intent.replaceAll('_', ' ')} · {run.iteration} iteration</span></div>
         <div className="agent-activity">{run.activity.map((entry, index) => <div key={`${entry.timestamp}-${index}`}><span className={`activity-dot ${entry.status}`} /> <span><strong>{entry.actor}</strong> {entry.message}</span></div>)}</div>
-        {run.results.filter((result) => result.agentId !== 'orchestrator').map((result) => <div className="agent-evidence" key={result.agentId}><strong>{result.agentId.replaceAll('-', ' ')}</strong><p>{result.summary}</p>{result.recommendations?.map((recommendation) => <small key={recommendation}>{recommendation}</small>)}</div>)}
+        {run.results.filter((result) => result.agentId !== 'orchestrator').map((result) => {
+          const sql = result.evidence.find((evidence) => evidence.kind === 'sql')?.value;
+          const chart = result.evidence.find((evidence) => evidence.kind === 'chart')?.value as { type?: string; title?: string; xKey?: string; yKey?: string; data?: Array<Record<string, unknown>> } | undefined;
+          return <div className="agent-evidence" key={result.agentId}><strong>{result.agentId.replaceAll('-', ' ')}</strong><p>{result.summary}</p>{typeof sql === 'string' ? <details><summary>Executed SQL</summary><code>{sql}</code></details> : null}{chart?.data?.length ? <details open><summary>{chart.title ?? 'Verified chart'} ({chart.type})</summary><div className="record-table-wrap"><table><thead><tr>{Object.keys(chart.data[0]).map((key) => <th key={key}>{key}</th>)}</tr></thead><tbody>{chart.data.slice(0, 50).map((row, index) => <tr key={index}>{Object.keys(chart.data?.[0] ?? {}).map((key) => <td key={key}>{String(row[key] ?? '—')}</td>)}</tr>)}</tbody></table></div></details> : null}{result.recommendations?.map((recommendation) => <small key={recommendation}>{recommendation}</small>)}</div>;
+        })}
         {run.verification ? <p className={run.verification.passed ? 'agent-pass' : 'agent-blocked'}>{run.verification.summary}</p> : null}
       </div> : null}
     </section>

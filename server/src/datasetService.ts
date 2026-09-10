@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import db from './db.js';
 import type { AnalysisStatus, Dataset, DatasetInput, DatasetRecord } from './types.js';
@@ -56,7 +57,9 @@ const mapRow = (row: any): Dataset => ({
   last_analyzed_at: row.last_analyzed_at ?? null,
   quality_score: row.quality_score === null || row.quality_score === undefined ? null : Number(row.quality_score),
   analysis_run_id: row.analysis_run_id ?? null,
-  quality_report: row.quality_report ?? null
+  quality_report: row.quality_report ?? null,
+  revision: Number(row.revision ?? 1),
+  content_version: row.content_version ?? createHash('sha256').update(row.records ?? '[]').digest('hex')
 });
 
 export const listDatasets = () => {
@@ -89,12 +92,14 @@ export const createDataset = (input: DatasetInput) => {
     last_analyzed_at: null,
     quality_score: null,
     analysis_run_id: null,
-    quality_report: null
+    quality_report: null,
+    revision: 1,
+    content_version: createHash('sha256').update(JSON.stringify(parsedRecords)).digest('hex')
   };
 
   db.prepare(
-    `INSERT INTO datasets (id, name, description, source_type, file_name, row_count, column_count, records, created_at, updated_at, analysis_status)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    `INSERT INTO datasets (id, name, description, source_type, file_name, row_count, column_count, records, created_at, updated_at, analysis_status, revision, content_version)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   ).run(
     dataset.id,
     dataset.name,
@@ -106,7 +111,9 @@ export const createDataset = (input: DatasetInput) => {
     JSON.stringify(dataset.records),
     dataset.created_at,
     dataset.updated_at,
-    dataset.analysis_status
+    dataset.analysis_status,
+    dataset.revision,
+    dataset.content_version
   );
 
   return dataset;
@@ -135,12 +142,14 @@ export const updateDataset = (id: string, input: DatasetUpdateInput) => {
     row_count: meta.row_count,
     column_count: meta.column_count,
     updated_at: new Date().toISOString(),
-    analysis_status: recordsChanged ? 'STALE' : existing.analysis_status
+    analysis_status: recordsChanged ? 'STALE' : existing.analysis_status,
+    revision: recordsChanged ? existing.revision + 1 : existing.revision,
+    content_version: recordsChanged ? createHash('sha256').update(JSON.stringify(merged.records)).digest('hex') : existing.content_version
   };
 
   db.prepare(
     `UPDATE datasets
-     SET name = ?, description = ?, source_type = ?, file_name = ?, row_count = ?, column_count = ?, records = ?, updated_at = ?, analysis_status = ?
+     SET name = ?, description = ?, source_type = ?, file_name = ?, row_count = ?, column_count = ?, records = ?, updated_at = ?, analysis_status = ?, revision = ?, content_version = ?
      WHERE id = ?`
   ).run(
     updated.name,
@@ -152,6 +161,8 @@ export const updateDataset = (id: string, input: DatasetUpdateInput) => {
     JSON.stringify(updated.records),
     updated.updated_at,
     updated.analysis_status,
+    updated.revision,
+    updated.content_version,
     id
   );
 

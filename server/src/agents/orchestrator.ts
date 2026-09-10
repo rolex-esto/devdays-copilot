@@ -4,9 +4,14 @@ import type { QualityReport } from '../quality.js';
 import { agentRegistry, verifyResults } from './registry.js';
 import { persistOrchestrationRun } from './store.js';
 import type { ActivityLog, AgentIntent, AgentResult, AgentTask, OrchestrationRun } from './types.js';
+import { runSqlAgent } from './sqlAgent.js';
+import { runVisualizationAgent } from './visualizationAgent.js';
+import { createMutationProposal } from '../mutationService.js';
 
 const MAX_ITERATIONS = 2;
 const MAX_AGENTS = 4;
+
+const isPromptInjection = (prompt: string) => /\b(ignore|disregard|forget)\s+(all\s+|any\s+|the\s+)?(?:previous|prior|above)\s+(instructions?|messages?)\b|\b(?:reveal|show|print|leak)\s+(?:the\s+)?(?:system|developer)\s+(?:prompt|message|instructions?)\b|\b(jailbreak| DAN mode)\b/i.test(prompt);
 
 const classifyIntent = (prompt: string): AgentIntent => {
   const text = prompt.toLowerCase();
@@ -46,13 +51,40 @@ export const runOrchestration = (userPrompt: string, datasetId?: string): Orches
   };
   const activity: ActivityLog[] = [];
   addActivity(activity, 'Orchestrator', 'running', `Intent classified as ${intent}.`);
+  if (isPromptInjection(userPrompt)) {
+    addActivity(activity, 'Safety gate', 'blocked', 'The request contains instruction-override language and was not dispatched to an agent.');
+    const run = {
+      runId,
+      userPrompt,
+      intent: 'general' as const,
+      selectedAgents: [],
+      plan: ['Reject instruction-override language before selecting tools.'],
+      iteration: 1,
+      status: 'BLOCKED' as const,
+      startedAt,
+      completedAt: new Date().toISOString(),
+      verification: null,
+      activity,
+      results: [{
+        agentId: 'orchestrator',
+        status: 'blocked' as const,
+        summary: 'The request was blocked by the prompt safety gate.',
+        evidence: [{ kind: 'routing' as const, summary: 'Untrusted instruction-like text cannot authorize tools or reveal hidden instructions.' }]
+      }]
+    };
+    persistOrchestrationRun(run, datasetId);
+    return run;
+  }
   const dataset = datasetId ? getDatasetById(datasetId) : null;
   const qualityReport = readQuality(dataset);
-  const selectedAgents = intent === 'data_quality' || intent === 'data_analysis' ? ['data-quality', 'data-analyst'] : [];
+  const selectedAgents = intent === 'data_quality' ? ['data-quality', 'data-analyst'] : intent === 'data_analysis' ? ['data-analyst', 'sql'] : intent === 'visualization' ? ['data-analyst', 'sql', 'visualization'] : intent === 'database' ? ['data-analyst', 'sql'] : [];
   const plan = selectedAgents.length ? ['Read the selected dataset scope', 'Collect deterministic quality evidence', 'Verify evidence against the request'] : ['Route to a supported specialist or return a bounded clarification.'];
   if (task.requiresWrite) {
     addActivity(activity, 'Permission gate', 'blocked', 'This request could change data and requires explicit approval before any mutation.');
-    const run = { runId, userPrompt, intent, selectedAgents, plan, iteration: 1, status: 'WAITING_FOR_APPROVAL' as const, startedAt, completedAt: null, verification: null, activity, results: [{ agentId: 'orchestrator', status: 'blocked' as const, summary: 'Mutation approval is required before data changes.', evidence: [{ kind: 'permission' as const, summary: 'No write tool was dispatched.' }], requiresApproval: true }] };
+    const operation = /\bunknown\b/i.test(userPrompt) ? 'replace_unknown_with_null' : 'delete_duplicate_rows';
+    const proposal = datasetId ? createMutationProposal(datasetId, operation, userPrompt, `run:${runId}`) : null;
+    const proposalResult: AgentResult = { agentId: 'orchestrator', status: 'blocked', summary: 'Mutation approval is required before data changes.', evidence: [{ kind: 'permission', summary: 'No write tool was dispatched.' }, ...(proposal ? [{ kind: 'proposal' as const, summary: 'A preview-only mutation proposal was persisted.', value: proposal.proposal }] : [])], requiresApproval: true };
+    const run = { runId, userPrompt, intent, selectedAgents, plan, iteration: 1, status: 'WAITING_FOR_APPROVAL' as const, startedAt, completedAt: null, verification: null, activity, results: [proposalResult] };
     persistOrchestrationRun(run, datasetId);
     return run;
   }
@@ -63,15 +95,26 @@ export const runOrchestration = (userPrompt: string, datasetId?: string): Orches
     return run;
   }
   addActivity(activity, 'Orchestrator', 'running', `Selected agents: ${selectedAgents.join(', ')}.`);
-  const results: AgentResult[] = selectedAgents.slice(0, MAX_AGENTS).map((agentId) => {
+  const executionAgents = selectedAgents.filter((agentId) => agentId !== 'visualization');
+  const results: AgentResult[] = executionAgents.slice(0, MAX_AGENTS).map((agentId) => {
     const agent = agentRegistry[agentId];
     addActivity(activity, agent.name, 'running', 'Collecting scoped evidence.');
-    const result = agent.execute({ task, dataset, qualityReport, iteration: 1 });
+    const result = agentId === 'sql' ? runSqlAgent({ task, dataset, qualityReport, iteration: 1 }) : agent.execute({ task, dataset, qualityReport, iteration: 1 });
     addActivity(activity, agent.name, result.status, result.summary);
     return result;
   });
   addActivity(activity, 'Verifier', 'running', 'Checking results against acceptance criteria.');
-  const verification = verifyResults(task, results);
+  let verification = verifyResults(task, results);
+  if (verification.passed && (intent === 'visualization' || (intent === 'data_analysis' && /\b(chart|visual|plot|graph)\b/i.test(userPrompt)))) {
+    const sqlResult = results.find((result) => result.agentId === 'sql');
+    if (sqlResult) {
+      addActivity(activity, 'Visualization Agent', 'running', 'Building a chart from verified SQL output.');
+      const chart = runVisualizationAgent(sqlResult, `${dataset?.name ?? 'Dataset'} analysis`);
+      results.push(chart);
+      addActivity(activity, 'Visualization Agent', chart.status, chart.summary);
+      verification = verifyResults(task, results);
+    }
+  }
   addActivity(activity, 'Verifier', verification.passed ? 'success' : 'partial', verification.summary);
   const run = { runId, userPrompt, intent, selectedAgents: [...selectedAgents, 'verifier'], plan, iteration: 1, status: verification.passed ? 'COMPLETED' as const : 'BLOCKED' as const, startedAt, completedAt: new Date().toISOString(), verification, activity, results };
   persistOrchestrationRun(run, datasetId);

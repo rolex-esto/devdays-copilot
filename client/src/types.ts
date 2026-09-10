@@ -19,6 +19,8 @@ export interface Dataset {
   quality_score: number | null;
   analysis_run_id: string | null;
   quality_report: string | null;
+  revision: number;
+  content_version: string;
 }
 
 export type IssueSeverity = 'critical' | 'high' | 'medium' | 'low';
@@ -89,6 +91,20 @@ export interface AgentRun {
     requiresApproval?: boolean;
   }>;
   verification: { passed: boolean; summary: string } | null;
+}
+
+export interface MutationProposal {
+  id: string;
+  dataset_id: string;
+  operation: string;
+  status: string;
+  reason: string;
+  before_values: DatasetRecord[];
+  after_values: DatasetRecord[];
+  dataset_revision: number;
+  content_version: string;
+  expires_at: string;
+  approval_token?: string | null;
 }
 
 export interface AgentRunSummary {

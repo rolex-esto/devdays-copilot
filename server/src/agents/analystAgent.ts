@@ -4,7 +4,7 @@ export const dataAnalystAgent: AgentDefinition = {
   id: 'data-analyst',
   name: 'Data Analyst Agent',
   capabilities: ['summarize dataset shape', 'rank evidence by affected records', 'explain supported analysis'],
-  allowedTools: ['dataset.read', 'quality.read'],
+  allowedTools: ['dataset.read', 'quality.read', 'sql.plan'],
   requiresApproval: false,
   supportedIntents: ['data_analysis', 'data_quality'],
   execute: ({ dataset, qualityReport }) => {
