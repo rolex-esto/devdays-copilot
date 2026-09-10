@@ -90,3 +90,14 @@ export interface AgentRun {
   }>;
   verification: { passed: boolean; summary: string } | null;
 }
+
+export interface AgentRunSummary {
+  id: string;
+  dataset_id: string;
+  user_prompt: string;
+  classified_intent: string;
+  status: string;
+  iteration_count: number;
+  started_at: string;
+  completed_at: string | null;
+}

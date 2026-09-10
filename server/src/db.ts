@@ -34,6 +34,43 @@ db.exec(`
   );
 
   CREATE INDEX IF NOT EXISTS idx_datasets_updated_at ON datasets(updated_at DESC);
+
+  CREATE TABLE IF NOT EXISTS agent_runs (
+    id TEXT PRIMARY KEY,
+    dataset_id TEXT,
+    user_prompt TEXT NOT NULL,
+    classified_intent TEXT NOT NULL,
+    status TEXT NOT NULL,
+    iteration_count INTEGER NOT NULL DEFAULT 1,
+    started_at TEXT NOT NULL,
+    completed_at TEXT,
+    created_at TEXT NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS agent_steps (
+    id TEXT PRIMARY KEY,
+    run_id TEXT NOT NULL,
+    agent_id TEXT NOT NULL,
+    iteration INTEGER NOT NULL,
+    status TEXT NOT NULL,
+    summary TEXT NOT NULL,
+    started_at TEXT NOT NULL,
+    completed_at TEXT,
+    FOREIGN KEY (run_id) REFERENCES agent_runs(id) ON DELETE CASCADE
+  );
+
+  CREATE TABLE IF NOT EXISTS agent_verifications (
+    run_id TEXT PRIMARY KEY,
+    passed INTEGER NOT NULL,
+    score REAL NOT NULL,
+    criteria_passed TEXT NOT NULL,
+    criteria_failed TEXT NOT NULL,
+    recommendation TEXT NOT NULL,
+    FOREIGN KEY (run_id) REFERENCES agent_runs(id) ON DELETE CASCADE
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_agent_runs_dataset ON agent_runs(dataset_id, created_at DESC);
+  CREATE INDEX IF NOT EXISTS idx_agent_steps_run ON agent_steps(run_id, started_at);
 `);
 
 const columns = db.prepare('PRAGMA table_info(datasets)').all() as Array<{ name: string }>;

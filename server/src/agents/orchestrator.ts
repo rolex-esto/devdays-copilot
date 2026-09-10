@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { getDatasetById } from '../datasetService.js';
 import type { QualityReport } from '../quality.js';
 import { agentRegistry, verifyResults } from './registry.js';
+import { persistOrchestrationRun } from './store.js';
 import type { ActivityLog, AgentIntent, AgentResult, AgentTask, OrchestrationRun } from './types.js';
 
 const MAX_ITERATIONS = 2;
@@ -51,11 +52,15 @@ export const runOrchestration = (userPrompt: string, datasetId?: string): Orches
   const plan = selectedAgents.length ? ['Read the selected dataset scope', 'Collect deterministic quality evidence', 'Verify evidence against the request'] : ['Route to a supported specialist or return a bounded clarification.'];
   if (task.requiresWrite) {
     addActivity(activity, 'Permission gate', 'blocked', 'This request could change data and requires explicit approval before any mutation.');
-    return { runId, userPrompt, intent, selectedAgents, plan, iteration: 1, status: 'WAITING_FOR_APPROVAL', startedAt, completedAt: null, verification: null, activity, results: [{ agentId: 'orchestrator', status: 'blocked', summary: 'Mutation approval is required before data changes.', evidence: [{ kind: 'permission', summary: 'No write tool was dispatched.' }], requiresApproval: true }] };
+    const run = { runId, userPrompt, intent, selectedAgents, plan, iteration: 1, status: 'WAITING_FOR_APPROVAL' as const, startedAt, completedAt: null, verification: null, activity, results: [{ agentId: 'orchestrator', status: 'blocked' as const, summary: 'Mutation approval is required before data changes.', evidence: [{ kind: 'permission' as const, summary: 'No write tool was dispatched.' }], requiresApproval: true }] };
+    persistOrchestrationRun(run, datasetId);
+    return run;
   }
   if (selectedAgents.length === 0) {
     addActivity(activity, 'Orchestrator', 'blocked', 'No deterministic specialist is registered for this intent yet.');
-    return { runId, userPrompt, intent, selectedAgents, plan, iteration: 1, status: 'BLOCKED', startedAt, completedAt: null, verification: null, activity, results: [{ agentId: 'orchestrator', status: 'blocked', summary: 'This request is outside the currently supported read-only specialist scope.', evidence: [{ kind: 'routing', summary: 'No matching specialist was selected.' }], recommendations: ['Ask for data quality or data analysis for a supported workflow.'] }] };
+    const run = { runId, userPrompt, intent, selectedAgents, plan, iteration: 1, status: 'BLOCKED' as const, startedAt, completedAt: null, verification: null, activity, results: [{ agentId: 'orchestrator', status: 'blocked' as const, summary: 'This request is outside the currently supported read-only specialist scope.', evidence: [{ kind: 'routing' as const, summary: 'No matching specialist was selected.' }], recommendations: ['Ask for data quality or data analysis for a supported workflow.'] }] };
+    persistOrchestrationRun(run, datasetId);
+    return run;
   }
   addActivity(activity, 'Orchestrator', 'running', `Selected agents: ${selectedAgents.join(', ')}.`);
   const results: AgentResult[] = selectedAgents.slice(0, MAX_AGENTS).map((agentId) => {
@@ -68,5 +73,7 @@ export const runOrchestration = (userPrompt: string, datasetId?: string): Orches
   addActivity(activity, 'Verifier', 'running', 'Checking results against acceptance criteria.');
   const verification = verifyResults(task, results);
   addActivity(activity, 'Verifier', verification.passed ? 'success' : 'partial', verification.summary);
-  return { runId, userPrompt, intent, selectedAgents: [...selectedAgents, 'verifier'], plan, iteration: 1, status: verification.passed ? 'COMPLETED' : 'BLOCKED', startedAt, completedAt: new Date().toISOString(), verification, activity, results };
+  const run = { runId, userPrompt, intent, selectedAgents: [...selectedAgents, 'verifier'], plan, iteration: 1, status: verification.passed ? 'COMPLETED' as const : 'BLOCKED' as const, startedAt, completedAt: new Date().toISOString(), verification, activity, results };
+  persistOrchestrationRun(run, datasetId);
+  return run;
 };

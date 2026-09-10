@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
-import { createDataset, deleteDataset, fetchDatasets, fetchQuality, importCsvDataset, runAgent, runQuality, updateDataset, updateDatasetRecord } from './api';
-import type { AgentRun, Dataset, DatasetRecord, DatasetSourceType, QualityIssue, QualityReport } from './types';
+import { createDataset, deleteDataset, fetchAgentRuns, fetchDatasets, fetchQuality, importCsvDataset, runAgent, runQuality, updateDataset, updateDatasetRecord } from './api';
+import type { AgentRun, AgentRunSummary, Dataset, DatasetRecord, DatasetSourceType, QualityIssue, QualityReport } from './types';
 
 const emptyForm = {
   name: '',
@@ -270,13 +270,14 @@ function Metric({ label, value }: { label: string; value: number }) {
   return <div className="metric-card"><span>{label}</span><strong>{value.toLocaleString()}</strong></div>;
 }
 
-function HistoryPanel({ dataset, report }: { dataset: Dataset; report: QualityReport | null }) {
+function HistoryPanel({ dataset, report, runs }: { dataset: Dataset; report: QualityReport | null; runs: AgentRunSummary[] }) {
   return (
     <section className="workspace-section panel">
       <div className="section-title-row"><div><p className="section-kicker">History</p><h2>Quality history</h2></div><span className="muted">{dataset.analysis_status === 'COMPLETED' ? 'Latest run' : 'No completed runs'}</span></div>
-      <table className="history-table"><thead><tr><th>Run</th><th>Score</th><th>Status</th></tr></thead><tbody>
-        <tr><td>{report?.last_analyzed_at ? new Date(report.last_analyzed_at).toLocaleString() : 'No run yet'}</td><td>{report?.score ?? '—'}</td><td><span className={`status-badge ${dataset.analysis_status.toLowerCase()}`}>{dataset.analysis_status.replace('_', ' ')}</span></td></tr>
+      <table className="history-table"><thead><tr><th>Status</th><th>Request</th><th>Intent</th><th>Iterations</th></tr></thead><tbody>
+        {runs.length ? runs.map((run) => <tr key={run.id}><td><span className={`status-badge ${run.status.toLowerCase()}`}>{run.status}</span></td><td>{run.user_prompt}</td><td>{run.classified_intent.replaceAll('_', ' ')}</td><td>{run.iteration_count}</td></tr>) : <tr><td colSpan={4}>No agent runs yet. Ask DataPulse a question to create one.</td></tr>}
       </tbody></table>
+      <p className="muted">{report?.last_analyzed_at ? `Latest quality check: ${new Date(report.last_analyzed_at).toLocaleString()}` : 'No quality check has been completed.'}</p>
     </section>
   );
 }
@@ -327,6 +328,7 @@ function App() {
   const [qualityLoading, setQualityLoading] = useState(false);
   const [selectedIssue, setSelectedIssue] = useState<QualityIssue | null>(null);
   const [activeView, setActiveView] = useState<'overview' | 'data' | 'columns' | 'quality' | 'history'>('quality');
+  const [agentRuns, setAgentRuns] = useState<AgentRunSummary[]>([]);
 
   const selectedDataset = useMemo(
     () => datasets.find((dataset) => dataset.id === selectedId) ?? null,
@@ -396,6 +398,14 @@ function App() {
       setQuality(null);
     }
   }, [isCreating, loadQuality, selectedDataset]);
+
+  useEffect(() => {
+    if (!selectedDataset) {
+      setAgentRuns([]);
+      return;
+    }
+    void fetchAgentRuns(selectedDataset.id).then(setAgentRuns).catch(() => setAgentRuns([]));
+  }, [selectedDataset]);
 
   const showCreateForm = () => {
     setSelectedId(null);
@@ -692,7 +702,7 @@ function App() {
                 onQualityRefresh={() => void loadQuality(selectedDataset.id)}
               />
             ) : null}
-            {activeView === 'history' ? <HistoryPanel dataset={selectedDataset} report={quality} /> : null}
+            {activeView === 'history' ? <HistoryPanel dataset={selectedDataset} report={quality} runs={agentRuns} /> : null}
             {activeView === 'overview' ? <form className="panel form-panel" onSubmit={handleUpdate}>
               <div className="panel-header">
                 <div>

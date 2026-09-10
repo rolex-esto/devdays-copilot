@@ -1,4 +1,4 @@
-import type { AgentRun, Dataset, DatasetRecord, DatasetSourceType } from './types';
+import type { AgentRun, AgentRunSummary, Dataset, DatasetRecord, DatasetSourceType } from './types';
 import type { QualityReport } from './types';
 
 const BASE = '/api';
@@ -41,6 +41,18 @@ export const runAgent = async (prompt: string, datasetId: string): Promise<Agent
     const error = await response.json().catch(() => ({ message: 'DataPulse could not process that request.' }));
     throw new Error(error.message ?? 'DataPulse could not process that request.');
   }
+  return response.json();
+};
+
+export const fetchAgentRuns = async (datasetId: string): Promise<AgentRunSummary[]> => {
+  const response = await fetch(`${BASE}/agents/runs?datasetId=${encodeURIComponent(datasetId)}`);
+  if (!response.ok) throw new Error('We could not load agent run history.');
+  return response.json();
+};
+
+export const fetchAgentRun = async (runId: string): Promise<Record<string, unknown>> => {
+  const response = await fetch(`${BASE}/agents/runs/${encodeURIComponent(runId)}`);
+  if (!response.ok) throw new Error('We could not load that agent run.');
   return response.json();
 };
 
