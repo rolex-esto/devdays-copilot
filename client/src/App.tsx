@@ -532,10 +532,9 @@ function App() {
     <div className="app-shell">
       <header className="topbar">
         <div className="brand">
-          <div className="brand-mark">DP</div>
+          <img className="brand-wordmark" src="/datapulse-logo.png" alt="DataPulse" />
           <div>
             <p className="eyebrow">Your data, made clearer</p>
-            <h1>DataPulse</h1>
           </div>
         </div>
         <button type="button" className="primary-button header-action" onClick={showCreateForm}>

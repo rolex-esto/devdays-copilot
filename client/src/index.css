@@ -28,6 +28,8 @@ button { cursor: pointer; }
 .app-shell { max-width: 1440px; margin: 0 auto; padding: 36px 32px 44px; }
 .topbar { display: flex; justify-content: space-between; align-items: center; gap: 24px; margin-bottom: 34px; }
 .brand { display: flex; align-items: center; gap: 14px; }
+.brand-logo { display: block; width: 46px; height: 46px; border-radius: 14px; object-fit: cover; }
+.brand-wordmark { display: block; width: 178px; height: 46px; object-fit: contain; object-position: left center; }
 .brand-mark {
   display: grid; place-items: center; width: 46px; height: 46px; border-radius: 14px;
   background: #1e6fd0; color: white; font-size: 0.82rem; font-weight: 800; letter-spacing: 0.08em;
@@ -158,6 +160,8 @@ textarea { resize: vertical; }
 body { background: #f7f8fa; color: #243142; }
 .app-shell { max-width: 1500px; padding: 24px 28px 40px; }
 .topbar { margin-bottom: 20px; }
+.brand-logo { width: 34px; height: 34px; border-radius: 7px; }
+.brand-wordmark { width: 150px; height: 34px; }
 .brand-mark { width: 34px; height: 34px; border-radius: 7px; box-shadow: none; }
 .brand h1 { font-size: 1.35rem; }
 .eyebrow, .section-kicker { text-transform: none; letter-spacing: .01em; color: #6b7785; font-size: .72rem; font-weight: 700; }
